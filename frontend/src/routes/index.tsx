@@ -78,8 +78,6 @@ function App() {
       <Button disabled={isDownloading} onClick={startDownload}>
         Download
       </Button>
-
-      <Outlet />
     </div>
   );
 }
