@@ -3,6 +3,7 @@ module github.com/henmalib/whisper-notes
 go 1.23.0
 
 require (
+	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20251022095811-322c2adb753a
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v2 v2.10.2
 )

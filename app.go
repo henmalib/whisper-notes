@@ -6,6 +6,8 @@ import (
 
 	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/henmalib/whisper-notes/backend/whisper"
+
+	whisperCpp "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
 )
 
 type App struct {
@@ -15,10 +17,12 @@ type App struct {
 }
 
 func NewApp() *App {
+	fmt.Println(whisperCpp.SampleRate)
+
 	cfg, err := config.LoadConfig("notes")
 
 	if err != nil {
-		fmt.Printf("Error while reading config file: %w", err)
+		fmt.Printf("Error while reading config file: %s", err)
 	}
 
 	return &App{

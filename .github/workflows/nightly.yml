@@ -8,32 +8,23 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_NAME: whisper-notes
+
 jobs:
-  nightly:
+  build_linux:
     runs-on: ubuntu-latest
-    env:
-      APP_NAME: whisper-notes
-      PLATFORMS: windows/amd64,linux/amd64
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: true }
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.23"
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.23" }
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-          run_install: false
+      - uses: pnpm/action-setup@v4
+        with: { version: 10, run_install: false }
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
@@ -49,25 +40,177 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev build-essential clang make
 
-      - name: Set up Git user
-        uses: fregante/setup-git-user@v2
+      - name: Build whisper.cpp bindings
+        run: |
+          cd whisper.cpp/bindings/go
+          make whisper
+          cd ../../../
+
+      - name: Build (Linux)
+        run: |
+          chmod +x ./build.sh
+          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64" -tags "webkit2_41"
+          ls -lh build/bin
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-bin
+          path: build/bin/${{ env.APP_NAME }}-linux-amd64
+
+  build_windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: true }
+
+      - uses: actions/setup-go@v5
+        with: { go-version: "1.23" }
+
+      - uses: pnpm/action-setup@v4
+        with: { version: 10, run_install: false }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      # Make Go/Node/PNPM binaries discoverable from inside MSYS2
+      - name: Expose tool paths for MSYS2
+        shell: pwsh
+        run: |
+          $goroot = (go env GOROOT)
+          $gobin  = (go env GOPATH) + "\bin"
+          $nodeBin = (Get-Command node).Source | Split-Path
+          echo "GOROOT_BIN=$goroot\bin"   >> $env:GITHUB_ENV
+          echo "GOBIN=$gobin"             >> $env:GITHUB_ENV
+          echo "NODE_BIN=$nodeBin"        >> $env:GITHUB_ENV
+          echo "PNPM_BIN=$env:PNPM_HOME"  >> $env:GITHUB_ENV
+
+      - name: Setup MSYS2 (MINGW64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            git
+          # speeds up pacman on subsequent runs
+          cache: true
+
+      # Cache the compiled static libs to speed up repeated builds
+      - name: Cache whisper static libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            whisper.cpp/build_go/src/*.a
+            whisper.cpp/build_go/ggml/src/*.a
+          key: ${{ runner.os }}-whisper-a-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**') }}
+
+      - name: Build whisper.cpp (Windows, MinGW)
+        shell: msys2 {0}
+        run: |
+          set -e
+          # Tooling on PATH for MSYS2
+          export PATH="$(cygpath -u "$GOROOT_BIN"):$PATH"
+          export PATH="$(cygpath -u "$GOBIN"):$PATH"
+          export PATH="$(cygpath -u "$NODE_BIN"):$PATH"
+          export PATH="$(cygpath -u "$PNPM_BIN"):$PATH"
+
+          which go && go version
+          which gcc && gcc --version | head -n1
+
+          # Parallel build; fall back to 2 if nproc missing
+          JOBS=$(nproc 2>/dev/null || echo 2)
+
+          # Clean then build the static libs used by the Go bindings
+          cd whisper.cpp/bindings/go
+          make clean || true
+          make -j"$JOBS" whisper
+          cd ../../..
+
+          # Normalize archive names so -lfoo works (lib*.a expected by ld)
+          LIBW="whisper.cpp/build_go/src"
+          LIBG="whisper.cpp/build_go/ggml/src"
+          test -f "$LIBW/whisper.a"      && cp -f "$LIBW/whisper.a"      "$LIBW/libwhisper.a"
+          test -f "$LIBG/ggml.a"         && cp -f "$LIBG/ggml.a"         "$LIBG/libggml.a"
+          test -f "$LIBG/ggml-base.a"    && cp -f "$LIBG/ggml-base.a"    "$LIBG/libggml-base.a"
+          test -f "$LIBG/ggml-cpu.a"     && cp -f "$LIBG/ggml-cpu.a"     "$LIBG/libggml-cpu.a"
+
+          echo "== Archives =="
+          ls -lh "$LIBW"/*.a "$LIBG"/*.a || true
+
+      - name: Build (Windows)
+        shell: msys2 {0}
+        run: |
+          set -e
+          # Tooling on PATH for MSYS2
+          export PATH="$(cygpath -u "$GOROOT_BIN"):$PATH"
+          export PATH="$(cygpath -u "$GOBIN"):$PATH"
+          export PATH="$(cygpath -u "$NODE_BIN"):$PATH"
+          export PATH="$(cygpath -u "$PNPM_BIN"):$PATH"
+
+          which wails && wails version
+          which go && go version
+          which gcc && gcc --version | head -n1
+
+          # Project include/lib paths
+          ROOT="$(pwd)"
+          INC1="$ROOT/whisper.cpp/include"
+          INC2="$ROOT/whisper.cpp/ggml/include"
+          LIBW="$ROOT/whisper.cpp/build_go/src"
+          LIBG="$ROOT/whisper.cpp/build_go/ggml/src"
+
+          # Ensure MinGW's lib dir is searched (contains libgomp.{a,dll})
+          export LIBRARY_PATH="/mingw64/lib:${LIBRARY_PATH}"
+
+          # Make sure -lwhisper/-lggml* resolve and link OpenMP runtime
+          export CGO_CFLAGS="-I$INC1 -I$INC2"
+          export CGO_LDFLAGS="-L$LIBW -lwhisper -L$LIBG -lggml -lggml-base -lggml-cpu -lgomp -lstdc++ -lm"
+
+          # Diagnostics (optional)
+          gcc -print-file-name=libgomp.a || true
+          ls -lh "$LIBW"/*.a "$LIBG"/*.a || true
+
+          chmod +x ./build.sh
+          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64.exe"
+          ls -lh build/bin
+
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-bin
+          path: build/bin/${{ env.APP_NAME }}-windows-amd64.exe
+
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build_linux, build_windows]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: false }
+
+      - uses: actions/download-artifact@v4
+        with: { name: linux-bin, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-bin, path: dist }
+
+      - uses: fregante/setup-git-user@v2
 
       - name: Move/refresh "nightly" tag
         run: |
+          git fetch --tags
           git tag -fa nightly -m "Nightly $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           git push -f origin nightly
 
-      - name: Build Windows
-        run: |
-          wails build -platform "windows/amd64" -o "$APP_NAME-windows-amd64.exe" -tags "webkit2_41"
-
-      - name: Build Linux
-        run: |
-          wails build -platform "linux/amd64" -o "$APP_NAME-linux-amd64" -tags "webkit2_41"
-
-      - name: Update "Nightly" release 
+      - name: Update "Nightly" release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: nightly
@@ -76,7 +219,8 @@ jobs:
           prerelease: true
           make_latest: true
           files: |
-            build/bin/${{ env.APP_NAME }}-windows-amd64.exe
-            build/bin/${{ env.APP_NAME }}-linux-amd64
+            dist/${{ env.APP_NAME }}-linux-amd64
+            dist/${{ env.APP_NAME }}-windows-amd64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

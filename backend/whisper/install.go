@@ -82,6 +82,16 @@ func urlForModel(model string) (string, error) {
 	return url.String(), nil
 }
 
+func (w *Whisper) getModelPath(modelname string) (string, error) {
+	url, err := urlForModel(modelname)
+
+	if err != nil {
+		return "", fmt.Errorf("Unable to load urlForModel %s: %w", modelname, err)
+	}
+
+	return os.ExpandEnv(filepath.Join(w.config.ModelPath, filepath.Base(url))), nil
+}
+
 func download(ctx context.Context, modelUrl, modelname, out string) (string, error) {
 	client := http.Client{}
 
