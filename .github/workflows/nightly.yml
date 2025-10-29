@@ -11,18 +11,27 @@ permissions:
 env:
   APP_NAME: whisper-notes
 
+concurrency:
+  group: nightly-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build_linux:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0, submodules: true }
+        with:
+          fetch-depth: 0
+          submodules: true
 
       - uses: actions/setup-go@v5
-        with: { go-version: "1.23" }
+        with:
+          go-version: "1.23"
 
       - uses: pnpm/action-setup@v4
-        with: { version: 10, run_install: false }
+        with:
+          version: 10
+          run_install: false
 
       - uses: actions/setup-node@v4
         with:
@@ -33,166 +42,235 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Install Linux deps
+      - name: Setup compiler wrappers
         run: |
+          # Linux: use system gcc/g++
+          cat > /tmp/zig-cc << 'EOF'
+          #!/bin/bash
+          exec gcc "$@"
+          EOF
+          cat > /tmp/zig-c++ << 'EOF'
+          #!/bin/bash
+          exec g++ "$@"
+          EOF
+          chmod +x /tmp/zig-cc /tmp/zig-c++
+
+      - name: Install platform dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update
           sudo apt-get install -y \
+            cmake ninja-build pkg-config \
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev build-essential clang make
+            librsvg2-dev
 
-      - name: Build whisper.cpp bindings
-        run: |
-          cd whisper.cpp/bindings/go
-          make whisper
-          cd ../../../
-
-      - name: Build (Linux)
-        run: |
-          chmod +x ./build.sh
-          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64" -tags "webkit2_41"
-          ls -lh build/bin
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: linux-bin
-          path: build/bin/${{ env.APP_NAME }}-linux-amd64
-
-  build_windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0, submodules: true }
-
-      - uses: actions/setup-go@v5
-        with: { go-version: "1.23" }
-
-      - uses: pnpm/action-setup@v4
-        with: { version: 10, run_install: false }
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-      # Make Go/Node/PNPM binaries discoverable from inside MSYS2
-      - name: Expose tool paths for MSYS2
-        shell: pwsh
-        run: |
-          $goroot = (go env GOROOT)
-          $gobin  = (go env GOPATH) + "\bin"
-          $nodeBin = (Get-Command node).Source | Split-Path
-          echo "GOROOT_BIN=$goroot\bin"   >> $env:GITHUB_ENV
-          echo "GOBIN=$gobin"             >> $env:GITHUB_ENV
-          echo "NODE_BIN=$nodeBin"        >> $env:GITHUB_ENV
-          echo "PNPM_BIN=$env:PNPM_HOME"  >> $env:GITHUB_ENV
-
-      - name: Setup MSYS2 (MINGW64)
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            base-devel
-            mingw-w64-x86_64-toolchain
-            mingw-w64-x86_64-cmake
-            git
-          # speeds up pacman on subsequent runs
-          cache: true
-
-      # Cache the compiled static libs to speed up repeated builds
       - name: Cache whisper static libs
         uses: actions/cache@v4
         with:
           path: |
             whisper.cpp/build_go/src/*.a
             whisper.cpp/build_go/ggml/src/*.a
-          key: ${{ runner.os }}-whisper-a-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**') }}
+          key: ${{ runner.os }}-linux-whisper-a-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**') }}
 
-      - name: Build whisper.cpp (Windows, MinGW)
-        shell: msys2 {0}
+      - name: Build whisper.cpp bindings
+        env:
+          CC: /tmp/zig-cc
+          CXX: /tmp/zig-c++
         run: |
-          set -e
-          # Tooling on PATH for MSYS2
-          export PATH="$(cygpath -u "$GOROOT_BIN"):$PATH"
-          export PATH="$(cygpath -u "$GOBIN"):$PATH"
-          export PATH="$(cygpath -u "$NODE_BIN"):$PATH"
-          export PATH="$(cygpath -u "$PNPM_BIN"):$PATH"
+          BUILD_DIR=whisper.cpp/build_go
+          rm -rf "${BUILD_DIR}"
+          
+          # Build CMake command with common flags
+          CMAKE_ARGS=(
+            -S whisper.cpp
+            -B "${BUILD_DIR}"
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_SHARED_LIBS=OFF
+            -DWHISPER_BUILD_TESTS=OFF
+            -DWHISPER_BUILD_EXAMPLES=OFF
+            -DGGML_BUILD_TESTS=OFF
+            -DGGML_BUILD_EXAMPLES=OFF
+            -DCMAKE_C_COMPILER=/tmp/zig-cc
+            -DCMAKE_CXX_COMPILER=/tmp/zig-c++
+          )
+          
+          cmake "${CMAKE_ARGS[@]}"
+          cmake --build "${BUILD_DIR}" --config Release
+          
+          # Ensure lib prefix for Go linker
+          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src"; do
+            for lib in whisper ggml ggml-base ggml-cpu; do
+              [ -f "$dir/${lib}.a" ] && cp "$dir/${lib}.a" "$dir/lib${lib}.a" || true
+            done
+          done
 
-          which go && go version
-          which gcc && gcc --version | head -n1
-
-          # Parallel build; fall back to 2 if nproc missing
-          JOBS=$(nproc 2>/dev/null || echo 2)
-
-          # Clean then build the static libs used by the Go bindings
-          cd whisper.cpp/bindings/go
-          make clean || true
-          make -j"$JOBS" whisper
-          cd ../../..
-
-          # Normalize archive names so -lfoo works (lib*.a expected by ld)
-          LIBW="whisper.cpp/build_go/src"
-          LIBG="whisper.cpp/build_go/ggml/src"
-          test -f "$LIBW/whisper.a"      && cp -f "$LIBW/whisper.a"      "$LIBW/libwhisper.a"
-          test -f "$LIBG/ggml.a"         && cp -f "$LIBG/ggml.a"         "$LIBG/libggml.a"
-          test -f "$LIBG/ggml-base.a"    && cp -f "$LIBG/ggml-base.a"    "$LIBG/libggml-base.a"
-          test -f "$LIBG/ggml-cpu.a"     && cp -f "$LIBG/ggml-cpu.a"     "$LIBG/libggml-cpu.a"
-
-          echo "== Archives =="
-          ls -lh "$LIBW"/*.a "$LIBG"/*.a || true
-
-      - name: Build (Windows)
-        shell: msys2 {0}
+      - name: Build app
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
         run: |
-          set -e
-          # Tooling on PATH for MSYS2
-          export PATH="$(cygpath -u "$GOROOT_BIN"):$PATH"
-          export PATH="$(cygpath -u "$GOBIN"):$PATH"
-          export PATH="$(cygpath -u "$NODE_BIN"):$PATH"
-          export PATH="$(cygpath -u "$PNPM_BIN"):$PATH"
-
-          which wails && wails version
-          which go && go version
-          which gcc && gcc --version | head -n1
-
-          # Project include/lib paths
           ROOT="$(pwd)"
-          INC1="$ROOT/whisper.cpp/include"
-          INC2="$ROOT/whisper.cpp/ggml/include"
-          LIBW="$ROOT/whisper.cpp/build_go/src"
-          LIBG="$ROOT/whisper.cpp/build_go/ggml/src"
-
-          # Ensure MinGW's lib dir is searched (contains libgomp.{a,dll})
-          export LIBRARY_PATH="/mingw64/lib:${LIBRARY_PATH}"
-
-          # Make sure -lwhisper/-lggml* resolve and link OpenMP runtime
-          export CGO_CFLAGS="-I$INC1 -I$INC2"
-          export CGO_LDFLAGS="-L$LIBW -lwhisper -L$LIBG -lggml -lggml-base -lggml-cpu -lgomp -lstdc++ -lm"
-
-          # Diagnostics (optional)
-          gcc -print-file-name=libgomp.a || true
-          ls -lh "$LIBW"/*.a "$LIBG"/*.a || true
-
+          
+          # Use the wrapper scripts
+          export CC=/tmp/zig-cc
+          export CXX=/tmp/zig-c++
+          
+          # Linux system gcc
+          export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include"
+          export CGO_LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src -lwhisper -lggml -lggml-base -lggml-cpu -lstdc++"
+          
           chmod +x ./build.sh
-          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64.exe"
-          ls -lh build/bin
+          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64" -tags webkit2_41
 
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-bin
+          path: build/bin/${{ env.APP_NAME }}-linux-amd64
+      
+      - name: Upload Wails bindings
+        uses: actions/upload-artifact@v4
+        with:
+          name: wailsjs-bindings
+          path: frontend/wailsjs/
 
-      - uses: actions/upload-artifact@v4
+  build-windows:
+    runs-on: ubuntu-latest
+    needs: build-linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Download Wails bindings from Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: wailsjs-bindings
+          path: frontend/wailsjs/
+
+      - name: Setup compiler wrappers
+        run: |
+          # Windows: use system mingw-w64 for cross-compilation
+          cat > /tmp/zig-cc << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-gcc "$@"
+          EOF
+          cat > /tmp/zig-c++ << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-g++ "$@"
+          EOF
+          chmod +x /tmp/zig-cc /tmp/zig-c++
+
+      - name: Install platform dependencies
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config
+          # Install mingw-w64 for Windows cross-compilation
+          sudo apt-get install -y mingw-w64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+          # Switch to posix threading model for C++11 std::mutex support
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+      - name: Cache whisper static libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            whisper.cpp/build_go/src/*.a
+            whisper.cpp/build_go/ggml/src/*.a
+          key: ${{ runner.os }}-windows-whisper-a-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**') }}
+
+      - name: Build whisper.cpp bindings
+        env:
+          CC: /tmp/zig-cc
+          CXX: /tmp/zig-c++
+        run: |
+          BUILD_DIR=whisper.cpp/build_go
+          rm -rf "${BUILD_DIR}"
+          
+          # Build CMake command with common flags
+          CMAKE_ARGS=(
+            -S whisper.cpp
+            -B "${BUILD_DIR}"
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_SHARED_LIBS=OFF
+            -DWHISPER_BUILD_TESTS=OFF
+            -DWHISPER_BUILD_EXAMPLES=OFF
+            -DGGML_BUILD_TESTS=OFF
+            -DGGML_BUILD_EXAMPLES=OFF
+            -DCMAKE_C_COMPILER=/tmp/zig-cc
+            -DCMAKE_CXX_COMPILER=/tmp/zig-c++
+            -DCMAKE_SYSTEM_NAME=Windows
+          )
+          
+          # Target Windows 7 to avoid power throttling APIs not in mingw-w64 headers
+          # mingw-w64-posix provides C++11 threading support
+          WIN_FLAGS="-D_WIN32_WINNT=0x0601"
+          CMAKE_ARGS+=(-DCMAKE_C_FLAGS="$WIN_FLAGS")
+          CMAKE_ARGS+=(-DCMAKE_CXX_FLAGS="$WIN_FLAGS -std=c++11")
+          
+          cmake "${CMAKE_ARGS[@]}"
+          cmake --build "${BUILD_DIR}" --config Release
+          
+          # Ensure lib prefix for Go linker
+          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src"; do
+            for lib in whisper ggml ggml-base ggml-cpu; do
+              [ -f "$dir/${lib}.a" ] && cp "$dir/${lib}.a" "$dir/lib${lib}.a" || true
+            done
+          done
+
+      - name: Build app
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: |
+          ROOT="$(pwd)"
+          
+          # Use the wrapper scripts
+          export CC=/tmp/zig-cc
+          export CXX=/tmp/zig-c++
+          
+          # mingw-w64-posix: C++11 for std::mutex, winpthread and winsock2 for Windows
+          export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include"
+          export CGO_CXXFLAGS="-std=c++11"
+          export CGO_LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src -lwhisper -lggml -lggml-base -lggml-cpu -lstdc++ -lgomp -lwinpthread -lws2_32"
+          
+          chmod +x ./build.sh
+          # Skip bindings - use the ones from Linux build
+          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64.exe" -ldflags '-linkmode external -extldflags "-static"' -skipbindings
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
         with:
           name: windows-bin
           path: build/bin/${{ env.APP_NAME }}-windows-amd64.exe
 
-
   publish:
     runs-on: ubuntu-latest
-    needs: [build_linux, build_windows]
+    needs: [build-linux, build-windows]
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0, submodules: false }
@@ -223,4 +301,3 @@ jobs:
             dist/${{ env.APP_NAME }}-windows-amd64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
