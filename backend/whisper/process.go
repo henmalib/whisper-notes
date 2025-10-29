@@ -30,6 +30,10 @@ func (w *Whisper) Process(modelname string, data []float32) (string, error) {
 		return "", fmt.Errorf("Unable to create model context: %w", err)
 	}
 
+	if modelContext.IsMultilingual() {
+		modelContext.SetLanguage("auto")
+	}
+
 	var sb strings.Builder
 
 	// TODO: take a look at the callbacks

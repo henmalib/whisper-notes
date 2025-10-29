@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 
+	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
@@ -26,6 +27,9 @@ func main() {
 		Bind: []any{
 			app,
 			&app.Whisper,
+			&config.ConfigHelper{
+				Appname: "notes",
+			},
 		},
 	})
 

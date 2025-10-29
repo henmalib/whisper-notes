@@ -14,6 +14,7 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StereoAudioRecorder, RecordRTCPromisesHandler } from "recordrtc";
+import { GetConfig } from "@wailsjs/go/config/ConfigHelper";
 
 const formatDownloadString = (model: string, progress: number) => {
   return `Downloading a model ${model}: ${progress}%`;
@@ -25,10 +26,14 @@ const Audio = ({ currentModel }: { currentModel: string }) => {
 
   const startRecording = async () => {
     setRecording(true);
+    const config = await GetConfig();
+
     const stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        deviceId: "B7FD5EF81492377086A8DBB156709B32B78A8904",
-      },
+      audio: config.MicrophoneId
+        ? {
+            deviceId: config.MicrophoneId,
+          }
+        : true,
     });
 
     recorder.current = new RecordRTCPromisesHandler(stream, {

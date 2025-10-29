@@ -6,34 +6,29 @@ import (
 
 	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/henmalib/whisper-notes/backend/whisper"
-
-	whisperCpp "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
 )
 
 type App struct {
 	ctx     context.Context
-	Config  *config.Config
 	Whisper whisper.Whisper
 }
 
 func NewApp() *App {
-	fmt.Println(whisperCpp.SampleRate)
 
-	cfg, err := config.LoadConfig("notes")
-
-	if err != nil {
-		fmt.Printf("Error while reading config file: %s", err)
-	}
-
-	return &App{
-		Config: cfg,
-	}
+	return &App{}
 }
 
 func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+	configHelper := config.ConfigHelper{
+		Appname: "notes",
+	}
 
-	a.Whisper = whisper.NewWhisper(ctx, a.Config)
+	if err := configHelper.LoadConfig(); err != nil {
+		fmt.Printf("Error while reading config file: %s", err)
+	}
+
+	a.ctx = ctx
+	a.Whisper = whisper.NewWhisper(ctx, configHelper)
 }
 
 func (a *App) Echo(str string) string {

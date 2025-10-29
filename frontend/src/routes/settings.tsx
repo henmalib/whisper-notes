@@ -13,9 +13,35 @@ import { BrowserOpenURL } from "@wailsjs/runtime/runtime";
 import { Dialog, DialogTrigger } from "@radix-ui/react-dialog";
 import React from "react";
 import { DialogContent } from "@/components/ui/dialog";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { UpdateConfig, GetConfig } from "@wailsjs/go/config/ConfigHelper";
 
 export const Route = createFileRoute("/settings")({
   component: SettingsPage,
+  async loader() {
+    const config = await GetConfig();
+    let deviceId = config.MicrophoneId;
+
+    if (!deviceId) {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const track = stream.getAudioTracks()[0];
+      const settings = track.getSettings();
+
+      deviceId = settings.deviceId!;
+    }
+
+    const devices = await navigator.mediaDevices.enumerateDevices();
+
+    return devices
+      .filter((d) => d.kind === "audioinput")
+      .map((d) => {
+        return {
+          ...d.toJSON(),
+          selected: d.deviceId === deviceId,
+        };
+      });
+  },
 });
 
 const LicenseTextDialog = ({
@@ -34,10 +60,26 @@ const LicenseTextDialog = ({
 
 // TODO: make it pretty
 function SettingsPage() {
+  const devices = Route.useLoaderData();
+
   return (
     <main>
+      <div className="flex flex-col gap-2">
+        <RadioGroup
+          onValueChange={(deviceId) => UpdateConfig("MicrophoneId", deviceId)}
+          defaultValue={devices.find((d) => d.selected)?.deviceId}
+        >
+          {devices.map((device) => (
+            <div key={device.deviceId} className="flex flex-row gap-2">
+              <RadioGroupItem value={device.deviceId} id={device.deviceId} />
+              <Label htmlFor={device.deviceId}>{device.label}</Label>
+            </div>
+          ))}
+        </RadioGroup>
+      </div>
+
+      <h4 className="mt-16">Open Source Components and Licenses</h4>
       <Table>
-        <TableCaption>Open Source Components and Licenses</TableCaption>
         <TableHeader>
           <TableRow>
             <TableHead>Package</TableHead>
@@ -49,7 +91,7 @@ function SettingsPage() {
           {licenses
             .filter((license) => license.package !== "whisper-notes-frontend")
             .map((license) => (
-              <TableRow>
+              <TableRow key={license.package}>
                 <TableCell
                   className="cursor-pointer hover:underline"
                   onClick={() => license.url && BrowserOpenURL(license.url)}

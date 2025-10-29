@@ -38,12 +38,16 @@ var (
 	}
 )
 
-type Whisper struct {
-	ctx    context.Context
-	config *config.Config
+type ConfigLoader interface {
+	GetConfig() *config.Config
 }
 
-func NewWhisper(ctx context.Context, config *config.Config) Whisper {
+type Whisper struct {
+	ctx    context.Context
+	config ConfigLoader
+}
+
+func NewWhisper(ctx context.Context, config ConfigLoader) Whisper {
 	return Whisper{
 		ctx:    ctx,
 		config: config,
@@ -61,7 +65,7 @@ func (w *Whisper) Download(model string) (string, error) {
 		return "", fmt.Errorf("Couldn't resolve model url: %w", err)
 	}
 
-	return download(w.ctx, url, model, w.config.ModelPath)
+	return download(w.ctx, url, model, w.config.GetConfig().ModelPath)
 }
 
 func urlForModel(model string) (string, error) {
@@ -83,13 +87,13 @@ func urlForModel(model string) (string, error) {
 }
 
 func (w *Whisper) getModelPath(modelname string) (string, error) {
-	url, err := urlForModel(modelname)
+	modelUrl, err := urlForModel(modelname)
 
 	if err != nil {
 		return "", fmt.Errorf("Unable to load urlForModel %s: %w", modelname, err)
 	}
 
-	return os.ExpandEnv(filepath.Join(w.config.ModelPath, filepath.Base(url))), nil
+	return os.ExpandEnv(filepath.Join(w.config.GetConfig().ModelPath, filepath.Base(modelUrl))), nil
 }
 
 func download(ctx context.Context, modelUrl, modelname, out string) (string, error) {
