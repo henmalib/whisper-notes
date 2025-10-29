@@ -64,7 +64,8 @@ jobs:
             libwebkit2gtk-4.1-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            librsvg2-dev
+            librsvg2-dev \
+            libvulkan-dev glslc
 
       - name: Cache whisper static libs
         uses: actions/cache@v4
@@ -92,6 +93,7 @@ jobs:
             -DWHISPER_BUILD_EXAMPLES=OFF
             -DGGML_BUILD_TESTS=OFF
             -DGGML_BUILD_EXAMPLES=OFF
+            -DGGML_VULKAN=ON
             -DCMAKE_C_COMPILER=/tmp/zig-cc
             -DCMAKE_CXX_COMPILER=/tmp/zig-c++
           )
@@ -118,9 +120,22 @@ jobs:
           export CC=/tmp/zig-cc
           export CXX=/tmp/zig-c++
           
-          # Linux system gcc
+          # Linux system gcc - dynamically build library paths and flags
           export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include"
-          export CGO_LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src -lwhisper -lggml -lggml-base -lggml-cpu -lstdc++"
+          
+          # Build -L flags for all directories containing .a files
+          LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src"
+          for backend_dir in "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/; do
+            [ -d "$backend_dir" ] && LDFLAGS="$LDFLAGS -L$backend_dir"
+          done
+          
+          # Build -l flags for all .a libraries found
+          LIBS=""
+          for afile in "$ROOT/whisper.cpp/build_go/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/*.a; do
+            [ -f "$afile" ] && LIBS="$LIBS -l$(basename "$afile" .a | sed 's/^lib//')"
+          done
+          
+          export CGO_LDFLAGS="$LDFLAGS $LIBS -lvulkan -lstdc++"
           
           chmod +x ./build.sh
           ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64" -tags webkit2_41
@@ -234,10 +249,16 @@ jobs:
           cmake "${CMAKE_ARGS[@]}"
           cmake --build "${BUILD_DIR}" --config Release
           
-          # Ensure lib prefix for Go linker
-          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src"; do
-            for lib in whisper ggml ggml-base ggml-cpu; do
-              [ -f "$dir/${lib}.a" ] && cp "$dir/${lib}.a" "$dir/lib${lib}.a" || true
+          # Ensure lib prefix for Go linker - dynamically find all .a files
+          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src" "${BUILD_DIR}/ggml/src"/ggml-*/; do
+            [ ! -d "$dir" ] && continue
+            for afile in "$dir"/*.a; do
+              [ ! -f "$afile" ] && continue
+              basename=$(basename "$afile")
+              # Add lib prefix if not already present
+              if [[ ! "$basename" =~ ^lib ]]; then
+                cp "$afile" "$dir/lib${basename}"
+              fi
             done
           done
 
@@ -253,10 +274,23 @@ jobs:
           export CC=/tmp/zig-cc
           export CXX=/tmp/zig-c++
           
-          # mingw-w64-posix: C++11 for std::mutex, winpthread and winsock2 for Windows
+          # mingw-w64-posix: C++11 for std::mutex, winpthread and winsock2 for Windows - dynamically build library paths and flags
           export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include"
           export CGO_CXXFLAGS="-std=c++11"
-          export CGO_LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src -lwhisper -lggml -lggml-base -lggml-cpu -lstdc++ -lgomp -lwinpthread -lws2_32"
+          
+          # Build -L flags for all directories containing .a files
+          LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src"
+          for backend_dir in "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/; do
+            [ -d "$backend_dir" ] && LDFLAGS="$LDFLAGS -L$backend_dir"
+          done
+          
+          # Build -l flags for all .a libraries found
+          LIBS=""
+          for afile in "$ROOT/whisper.cpp/build_go/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/*.a; do
+            [ -f "$afile" ] && LIBS="$LIBS -l$(basename "$afile" .a | sed 's/^lib//')"
+          done
+          
+          export CGO_LDFLAGS="$LDFLAGS $LIBS -lstdc++ -lgomp -lwinpthread -lws2_32"
           
           chmod +x ./build.sh
           # Skip bindings - use the ones from Linux build
