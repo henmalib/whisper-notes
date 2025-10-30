@@ -27,6 +27,7 @@ func main() {
 		Bind: []any{
 			app,
 			&app.Whisper,
+			&app.Audio,
 			&config.ConfigHelper{
 				Appname: "notes",
 			},

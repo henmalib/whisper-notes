@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { StereoAudioRecorder, RecordRTCPromisesHandler } from "recordrtc";
+import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig } from "@wailsjs/go/config/ConfigHelper";
 
 const formatDownloadString = (model: string, progress: number) => {
@@ -22,51 +22,24 @@ const formatDownloadString = (model: string, progress: number) => {
 
 const Audio = ({ currentModel }: { currentModel: string }) => {
   const [isRecording, setRecording] = useState(false);
-  const recorder = useRef<RecordRTCPromisesHandler>(null as any);
 
   const startRecording = async () => {
     setRecording(true);
+
     const config = await GetConfig();
+    await CaptureAudio(config.MicrophoneId);
+    await new Promise((r) => setTimeout(r, 5000));
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: config.MicrophoneId
-        ? {
-            deviceId: config.MicrophoneId,
-          }
-        : true,
-    });
-
-    recorder.current = new RecordRTCPromisesHandler(stream, {
-      type: "audio",
-      mimeType: "audio/wav",
-      recorderType: StereoAudioRecorder,
-      numberOfAudioChannels: 1,
-    });
-    await recorder.current.startRecording();
-
-    await new Promise((r) => setTimeout(r, 3000));
     await stopRecording();
   };
 
   const stopRecording = async () => {
-    const someString = await recorder.current.stopRecording();
-    console.log("stopRecording returned", someString);
-    const blob = await recorder.current.getBlob();
-
-    await recorder.current.destroy();
     setRecording(false);
 
-    // @ts-ignore
-    const ac = new (window.AudioContext || window.webkitAudioContext)({
-      sampleRate: 16000,
-    });
-    const arrBuf = await blob.arrayBuffer();
-    const audioBuf = await ac.decodeAudioData(arrBuf);
-
-    const samples16k = new Float32Array(audioBuf.getChannelData(0));
-
-    // We already know, that this is a NUMBER array
-    const result = await Process(currentModel, [...samples16k] as any);
+    const audio = await StopCapturing();
+    console.log(audio);
+    const result = await Process(currentModel, audio);
+    console.log(result);
 
     toast.success(result);
   };

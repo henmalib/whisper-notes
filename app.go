@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/henmalib/whisper-notes/backend/audio"
 	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/henmalib/whisper-notes/backend/whisper"
 )
@@ -11,10 +12,10 @@ import (
 type App struct {
 	ctx     context.Context
 	Whisper whisper.Whisper
+	Audio   audio.Audio
 }
 
 func NewApp() *App {
-
 	return &App{}
 }
 
@@ -29,6 +30,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.ctx = ctx
 	a.Whisper = whisper.NewWhisper(ctx, configHelper)
+	a.Audio = audio.NewAudio()
 }
 
 func (a *App) Echo(str string) string {

@@ -2,10 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Toaster } from "@/components/ui/sonner";
 import { createRootRoute, Link, Outlet } from "@tanstack/react-router";
 import { Cog } from "lucide-react";
+import { GetAudioDevices } from "@wailsjs/go/audio/Audio";
 
 const RootLayout = () => {
-  // Just to get permissions... makes macos shut up
-  navigator.mediaDevices.getUserMedia({ audio: true });
+  GetAudioDevices().then(console.log);
+
+  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+    stream.getTracks().forEach((track) => track.stop());
+  });
 
   return (
     <div id="App">
