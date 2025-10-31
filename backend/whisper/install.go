@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"errors"
+	"io"
 
 	"github.com/henmalib/whisper-notes/backend/config"
 
@@ -146,14 +148,24 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 		default:
 			n, err := resp.Body.Read(data)
 
-			if err != nil {
-				downloadReport(ctx, count, resp.ContentLength, modelname)
-				return path, err
-			} else if m, err := w.Write(data[:n]); err != nil {
-				return path, err
-			} else {
+			if n > 0 {
+				m, werr := w.Write(data[:n]); 
+				if werr != nil {
+					return path, werr
+				}
+
 				count += int64(m)
 			}
+
+			if err != nil {
+				downloadReport(ctx, count, resp.ContentLength, modelname)
+
+				if errors.Is(err, io.EOF) {
+					return path, nil
+				}
+
+				return path, err
+			} 
 		}
 	}
 }
