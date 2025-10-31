@@ -10,4 +10,4 @@ done
 
 export LIBRARY_PATH="$(realpath "./whisper.cpp/build_go/src"):$(realpath ./whisper.cpp/build_go/ggml/src):${BACKEND_PATHS}$LIBRARY_PATH"
 
-wails build "$@"
+wails build "$@" -upx

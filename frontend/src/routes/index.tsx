@@ -28,27 +28,22 @@ const Audio = ({ currentModel }: { currentModel: string }) => {
 
     const config = await GetConfig();
     await CaptureAudio(config.MicrophoneId);
-    await new Promise((r) => setTimeout(r, 5000));
-
-    await stopRecording();
   };
 
   const stopRecording = async () => {
     setRecording(false);
 
     const audio = await StopCapturing();
-    console.log(audio);
     const result = await Process(currentModel, audio);
-    console.log(result);
 
     toast.success(result);
   };
 
-  return (
-    <Button disabled={isRecording} onClick={startRecording}>
-      Record
-    </Button>
-  );
+  if (!isRecording) {
+    return <Button onClick={startRecording}>Record</Button>;
+  }
+
+  return <Button onClick={stopRecording}>Stop</Button>;
 };
 
 function App() {

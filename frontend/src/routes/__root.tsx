@@ -7,10 +7,6 @@ import { GetAudioDevices } from "@wailsjs/go/audio/Audio";
 const RootLayout = () => {
   GetAudioDevices().then(console.log);
 
-  navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-    stream.getTracks().forEach((track) => track.stop());
-  });
-
   return (
     <div id="App">
       <Toaster />

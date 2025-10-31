@@ -73,8 +73,6 @@ func (c ConfigHelper) GetConfig() *Config {
 	// We just ignore the error and use default config if the format is somehow wrong
 	_ = viper.Unmarshal(cfg)
 
-	fmt.Println(cfg)
-
 	return cfg
 }
 

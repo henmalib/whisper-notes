@@ -2,6 +2,8 @@ package main
 
 import (
 	"embed"
+	"os"
+	"runtime"
 
 	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/wailsapp/wails/v2"
@@ -13,6 +15,11 @@ import (
 var assets embed.FS
 
 func main() {
+	if runtime.GOOS == "linux" {
+		os.Setenv("WEBKIT_DISABLE_CRASH_HANDLER", "1")
+		os.Setenv("JSC_useJIT", "0")
+	}
+
 	app := NewApp()
 
 	err := wails.Run(&options.App{
