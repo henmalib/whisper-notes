@@ -94,7 +94,9 @@ func (a *Audio) CaptureAudio(deviceId string) error {
 	deviceConfig.Capture.Channels = 1
 	deviceConfig.SampleRate = whisperCpp.SampleRate
 	deviceConfig.Alsa.NoMMap = 1
-	deviceConfig.Capture.DeviceID = a.deviceInfo.ID.Pointer()
+	if a.deviceInfo != nil {
+		deviceConfig.Capture.DeviceID = a.deviceInfo.ID.Pointer()
+	}
 
 	a.currentBuffer = make([]byte, 0)
 

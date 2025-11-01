@@ -21,8 +21,6 @@ func (w *Whisper) Process(modelname string, data []float32) (string, error) {
 
 	defer model.Close()
 
-	fmt.Println("IsMultilingual", model.IsMultilingual())
-
 	// WAV with 1 channel and model and SampleRate of whisperCpp.SampleRate
 
 	modelContext, err := model.NewContext()
@@ -30,6 +28,7 @@ func (w *Whisper) Process(modelname string, data []float32) (string, error) {
 		return "", fmt.Errorf("Unable to create model context: %w", err)
 	}
 
+	fmt.Println("IsMultilingual", model.IsMultilingual())
 	if modelContext.IsMultilingual() {
 		modelContext.SetLanguage("auto")
 	}
