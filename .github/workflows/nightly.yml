@@ -139,7 +139,7 @@ jobs:
           
           chmod +x ./build.sh
           # TODO: use -upxflags="-9 --lzma" for release builds
-          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64-vulkan" -tags webkit2_41 -upxflags="-5"
+          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64-vulkan" -tags webkit2_41 -upxflags="-5" -devtools
 
       - name: Upload Linux binary
         uses: actions/upload-artifact@v4
@@ -446,7 +446,7 @@ jobs:
            chmod +x ./build.sh
           # Skip bindings - use the ones from Linux build, otherwise the build will explode
           # TODO: use -upxflags="-9 --lzma" for release builds
-          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64-vulkan.exe" -ldflags '-linkmode external -extldflags "-static"' -skipbindings -upxflags="-5"
+          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64-vulkan.exe" -ldflags '-linkmode external -extldflags "-static"' -skipbindings -upxflags="-5" -devtools -windowsconsole
 
       - name: Upload Windows binary
         uses: actions/upload-artifact@v4
