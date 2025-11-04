@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/henmalib/whisper-notes/backend/config"
-
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -40,16 +39,12 @@ var (
 	}
 )
 
-type ConfigLoader interface {
-	GetConfig() *config.Config
-}
-
 type Whisper struct {
 	ctx    context.Context
-	config ConfigLoader
+	config config.ConfigLoader
 }
 
-func NewWhisper(ctx context.Context, config ConfigLoader) Whisper {
+func NewWhisper(ctx context.Context, config config.ConfigLoader) Whisper {
 	return Whisper{
 		ctx:    ctx,
 		config: config,

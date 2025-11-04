@@ -21,7 +21,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
+import { ListNotes } from "@wailsjs/go/notes/Notes";
 import { useQuery } from "@tanstack/react-query";
+import { List, RowComponentProps, useDynamicRowHeight } from "react-window";
 
 const formatDownloadString = (model: string, progress: number) => {
   return `Downloading a model ${model}: ${progress}%`;
@@ -124,11 +126,10 @@ function App() {
     queryFn: () => IsModelInstalled(selectedModel),
   });
 
-  console.log("isSelectedModelInstalled", isSelectedModelInstalled);
-
   const { data: modelLanguges } = useQuery({
-    queryKey: ["model", "language", selectedModel],
+    queryKey: ["model", "language", selectedModel, isSelectedModelInstalled],
     queryFn: () => getLanguageForSelect(selectedModel),
+    staleTime: Infinity,
   });
 
   const setModel = (model: string) => {
@@ -167,59 +168,102 @@ function App() {
   };
 
   return (
-    <div>
-      <Select
-        onValueChange={setModel}
-        disabled={isDownloading}
-        value={selectedModel}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Select a model" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {models.map((model) => (
-              <SelectItem key={model} value={model}>
-                {model}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+    <div className="flex flex-row gap-2">
+      <NotesList />
 
-      <Select onValueChange={setLanguage} value={language}>
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder="Select a Language" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {(modelLanguges || []).map(({ label, value }) => (
-              <SelectItem key={label} value={value}>
-                {label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
+      <div>
+        <Select
+          onValueChange={setModel}
+          disabled={isDownloading}
+          value={selectedModel}
+        >
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select a model" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {models.map((model) => (
+                <SelectItem key={model} value={model}>
+                  {model}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
 
-      <Button disabled={isDownloading} onClick={startDownload}>
-        Download
-      </Button>
+        {/* TODO: Display Loader */}
+        <Select onValueChange={setLanguage} value={language}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Select a Language" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectGroup>
+              {(modelLanguges || []).map(({ label, value }) => (
+                <SelectItem key={label} value={value}>
+                  {label}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
 
-      <Audio
-        disabled={!isSelectedModelInstalled}
-        currentModel={selectedModel}
-        selectedLanguage={language}
-      />
+        <Button disabled={isDownloading} onClick={startDownload}>
+          Download
+        </Button>
+
+        <Audio
+          disabled={!isSelectedModelInstalled || !language}
+          currentModel={selectedModel}
+          selectedLanguage={language}
+        />
+      </div>
     </div>
   );
 }
 
+const Note = ({
+  index,
+  notes,
+  style,
+}: RowComponentProps<{
+  notes: Awaited<ReturnType<typeof ListNotes>>;
+}>) => {
+  return (
+    <div className="p-2" style={style}>
+      <h2 className="font-bold">test</h2>
+      <h4 className="">test2</h4>
+    </div>
+  );
+};
+
+const NotesList = () => {
+  const { notes } = Route.useLoaderData();
+
+  const rowHeight = useDynamicRowHeight({
+    defaultRowHeight: 50,
+  });
+
+  return (
+    <div className="w-60 h-screen">
+      <List
+        className="bg-muted/60 h-full border-border border divide-border divide-y-2"
+        style={{
+          overscrollBehavior: "none",
+        }}
+        rowComponent={Note}
+        rowCount={notes.length}
+        rowHeight={rowHeight}
+        rowProps={{ notes: notes }}
+      />
+    </div>
+  );
+};
+
 export const Route = createFileRoute("/")({
   component: App,
   async loader() {
-    const config = await GetConfig();
+    const [config, notes] = await Promise.all([GetConfig(), ListNotes()]);
 
-    return { model: config.CurrentModel };
+    return { model: config.CurrentModel, notes: notes };
   },
 });

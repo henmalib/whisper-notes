@@ -9,6 +9,8 @@ import (
 	"github.com/spf13/viper"
 )
 
+var appname = "notes"
+
 type Config struct {
 	ModelPath    string `mapstructure:"ModelPath"`
 	NotesPath    string `mapstructure:"NotesPath"`
@@ -21,7 +23,11 @@ type ConfigHelper struct {
 	Appname string
 }
 
-func getDefault(appname string) *Config {
+type ConfigLoader interface {
+	GetConfig() *Config
+}
+
+func init() {
 	ModelPath := ""
 	defaultModel := "large-v3-turbo"
 	notesPath := ""
@@ -35,22 +41,15 @@ func getDefault(appname string) *Config {
 		notesPath = "$HOME/.config/" + appname + "/notes"
 	}
 
-	viper.SetDefault("ModelPath", ModelPath)
-	viper.SetDefault("CurrentModel", defaultModel)
+	viper.Set("ModelPath", ModelPath)
+	viper.Set("CurrentModel", defaultModel)
 
 	// TODO: instead of default, always ask user first
-	viper.SetDefault("NotesPath", notesPath)
-
-	return &Config{
-		CurrentModel: defaultModel,
-		ModelPath:    ModelPath,
-		NotesPath:    notesPath,
-	}
+	viper.Set("NotesPath", notesPath)
 }
 
 func (c ConfigHelper) LoadConfig() error {
 	viper.SetConfigName(c.Appname)
-	getDefault(c.Appname)
 
 	var cfgPath string
 	switch runtime.GOOS {
@@ -76,12 +75,14 @@ func (c ConfigHelper) LoadConfig() error {
 }
 
 func (c ConfigHelper) GetConfig() *Config {
-	cfg := getDefault(c.Appname)
-
+	var cfg Config
 	// We just ignore the error and use default config if the format is somehow wrong
-	_ = viper.Unmarshal(cfg)
+	_ = viper.Unmarshal(&cfg)
 
-	return cfg
+	cfg.ModelPath = os.ExpandEnv(cfg.ModelPath)
+	cfg.NotesPath = os.ExpandEnv(cfg.NotesPath)
+
+	return &cfg
 }
 
 func (c ConfigHelper) UpdateConfig(field string, value any) error {

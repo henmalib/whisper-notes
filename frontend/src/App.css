@@ -127,4 +127,5 @@
 
 html, body, #App, #root {
   @apply text-foreground bg-background min-h-dvh;
+  overscroll-behavior: none;
 }

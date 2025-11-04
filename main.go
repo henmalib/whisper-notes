@@ -35,6 +35,7 @@ func main() {
 			app,
 			&app.Whisper,
 			&app.Audio,
+			&app.Notes,
 			&config.ConfigHelper{
 				Appname: "notes",
 			},

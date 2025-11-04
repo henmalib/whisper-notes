@@ -49,7 +49,7 @@ const RootLayout = () => {
           </Link>
         </div>
         <hr />
-        <main className="px-8 py-4">
+        <main>
           <Outlet />
         </main>
       </QueryClientProvider>
