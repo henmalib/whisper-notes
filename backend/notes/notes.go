@@ -2,9 +2,12 @@ package notes
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 
+	"github.com/google/uuid"
 	"github.com/henmalib/whisper-notes/backend/config"
 )
 
@@ -21,20 +24,26 @@ func NewNotes(ctx context.Context, cfg config.ConfigHelper) *Notes {
 }
 
 type NoteInfo struct {
-	Filename   string `json:"filename"`
+	Id         string `json:"id"`
 	ModifyDate int64  `json:"ModifyDate"`
 	Size       int64  `json:"size"`
 }
 
-func (n *Notes) GetNoteData() {}
-func (n *Notes) GetNoteInfo() {}
+type Metadata struct {
+	Title string `json:"title"`
+}
+
+func (n *NoteInfo) ReadData() string                         { return "" }
+func (n *NoteInfo) ReadMetadata() string                     { return "" }
+func (n *NoteInfo) AddAudio(bytes []byte, text string) error { return nil }
+func (n *NoteInfo) ChangeContent(content string) error       { return nil }
 
 func (n *Notes) ListNotes() ([]NoteInfo, error) {
 	notes := []NoteInfo{}
 
 	fmt.Println(n.cfg.GetConfig())
 
-	if err := os.MkdirAll(n.cfg.GetConfig().NotesPath, os.ModePerm); err != nil {
+	if err := os.MkdirAll(n.cfg.GetConfig().NotesPath, 0755); err != nil {
 		return notes, fmt.Errorf("Couldn't create notes directory: %w", err)
 	}
 
@@ -54,7 +63,7 @@ func (n *Notes) ListNotes() ([]NoteInfo, error) {
 			}
 
 			notes = append(notes, NoteInfo{
-				Filename:   info.Name(),
+				Id:         info.Name(),
 				Size:       info.Size(),
 				ModifyDate: info.ModTime().UnixMilli(),
 			})
@@ -63,5 +72,48 @@ func (n *Notes) ListNotes() ([]NoteInfo, error) {
 
 	return notes, nil
 }
-func (n *Notes) DelteNote() {}
-func (n *Notes) EditNote()  {}
+func (n *Notes) FindNote(id string) *NoteInfo {
+	notePath := path.Join(n.cfg.GetConfig().NotesPath, id)
+
+	stat, err := os.Stat(path.Join(notePath, "_metadata.json"))
+	if err != nil {
+		return nil
+	}
+
+	return &NoteInfo{
+		Id:         id,
+		Size:       stat.Size(),
+		ModifyDate: stat.ModTime().UnixMilli(),
+	}
+}
+
+func (n *Notes) CreateNote(title string) (string, error) {
+	noteId := uuid.New().String()
+	notePath := path.Join(n.cfg.GetConfig().NotesPath, noteId)
+
+	if err := os.MkdirAll(notePath, 0755); err != nil {
+		return noteId, err
+	}
+
+	file, err := os.OpenFile(path.Join(notePath, "_metadata.json"), os.O_RDWR|os.O_CREATE, 0700)
+	if err != nil {
+		return noteId, fmt.Errorf("Coudn't create metadata file: %w", err)
+	}
+
+	defer file.Close()
+
+	metadataBytes, err := json.Marshal(Metadata{
+		Title: title,
+	})
+
+	if err != nil {
+		return noteId, fmt.Errorf("Coudn't create metadata file: %w", err)
+	}
+
+	_, err = file.Write(metadataBytes)
+	if err != nil {
+		return noteId, fmt.Errorf("Coudn't write metadata file: %w", err)
+	}
+
+	return noteId, nil
+}

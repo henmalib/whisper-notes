@@ -1,6 +1,7 @@
 package audio
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"math"
@@ -163,4 +164,52 @@ func (a *Audio) StopCapturing() []float32 {
 	a.deviceInfo = nil
 
 	return bytesToFloat32LE(bytes)
+}
+
+func Float32ToWavBytes(data []float32) ([]byte, error) {
+	if len(data) == 0 {
+		return nil, fmt.Errorf("No audio data provided")
+	}
+
+	sampleRate := whisperCpp.SampleRate
+	numSamples := len(data)
+
+	var buf bytes.Buffer
+
+	byteRate := sampleRate * 2
+	blockAlign := 2
+
+	// --- WAV Header (44 bytes) ---
+	// ChunkID "RIFF"
+	buf.WriteString("RIFF")
+	binary.Write(&buf, binary.LittleEndian, uint32(36+numSamples*2))
+	buf.WriteString("WAVE")
+
+	// Subchunk1ID "fmt "
+	buf.WriteString("fmt ")
+	binary.Write(&buf, binary.LittleEndian, uint32(16)) // Subchunk1Size
+	binary.Write(&buf, binary.LittleEndian, uint16(1))  // PCM
+	binary.Write(&buf, binary.LittleEndian, uint16(1))  // Mono
+	binary.Write(&buf, binary.LittleEndian, uint32(sampleRate))
+	binary.Write(&buf, binary.LittleEndian, uint32(byteRate))
+	binary.Write(&buf, binary.LittleEndian, uint16(blockAlign))
+	binary.Write(&buf, binary.LittleEndian, uint16(16)) // BitsPerSample
+
+	// Subchunk2ID "data"
+	buf.WriteString("data")
+	binary.Write(&buf, binary.LittleEndian, uint32(numSamples*2))
+
+	// --- Samples ---
+	for _, v := range data {
+		// Clamp and convert to int16
+		if v > 1.0 {
+			v = 1.0
+		} else if v < -1.0 {
+			v = -1.0
+		}
+		sample := int16(math.Round(float64(v) * 32767))
+		binary.Write(&buf, binary.LittleEndian, sample)
+	}
+
+	return buf.Bytes(), nil
 }

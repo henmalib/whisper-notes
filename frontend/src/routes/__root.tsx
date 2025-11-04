@@ -10,13 +10,12 @@ const queryClient = new QueryClient();
 
 const handleError = (error: unknown) => {
   console.log("object", error);
-  if (
-    error &&
-    typeof error === "object" &&
-    "message" in error &&
-    typeof error.message === "string"
-  ) {
-    toast.error(error.message);
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof error.message === "string")
+      toast.error(error.message);
+    else if ("reason" in error && typeof error.reason === "string") {
+      toast.error(error.reason);
+    }
   } else {
     toast.error(JSON.stringify(error));
   }

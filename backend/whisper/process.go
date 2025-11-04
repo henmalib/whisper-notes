@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	whisperCpp "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func (w *Whisper) loadModel(modelname string) (whisperCpp.Model, error) {
@@ -23,7 +22,7 @@ func (w *Whisper) loadModel(modelname string) (whisperCpp.Model, error) {
 	return model, nil
 }
 
-func (w *Whisper) Process(modelname string, data []float32, lang string, toastId string) (transcibedResult string, processErr error) {
+func (w *Whisper) Process(modelname string, data []float32, lang string, processCallback func(int)) (transcibedResult string, processErr error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if e, ok := r.(error); ok {
@@ -59,10 +58,7 @@ func (w *Whisper) Process(modelname string, data []float32, lang string, toastId
 
 	if err = modelContext.Process(data, nil, func(s whisperCpp.Segment) {
 		sb.WriteString(s.Text)
-	}, func(i int) {
-		fmt.Println(i)
-		runtime.EventsEmit(w.ctx, fmt.Sprintf("whisper:audio:%s:progress", toastId), i)
-	}); err != nil {
+	}, processCallback); err != nil {
 		return "", fmt.Errorf("Unable to process audio file: %w", err)
 	}
 

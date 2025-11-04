@@ -17,10 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
+import { ProcessAndSaveNote } from "@wailsjs/go/fronthelpers/FrontHelpers";
 import { ListNotes } from "@wailsjs/go/notes/Notes";
 import { useQuery } from "@tanstack/react-query";
 import { List, RowComponentProps, useDynamicRowHeight } from "react-window";
@@ -238,10 +239,16 @@ const Note = ({
 
 const NotesList = () => {
   const { notes } = Route.useLoaderData();
+  const router = useRouter();
 
   const rowHeight = useDynamicRowHeight({
     defaultRowHeight: 50,
   });
+
+  const AddNewNote = async () => {
+    await ProcessAndSaveNote([], "en", "toastId");
+    await router.invalidate();
+  };
 
   return (
     <div className="w-60 h-screen">
@@ -255,6 +262,8 @@ const NotesList = () => {
         rowHeight={rowHeight}
         rowProps={{ notes: notes }}
       />
+
+      {/* <Button onClick={() => AddNewNote()}>ADD NOTE</Button> */}
     </div>
   );
 };

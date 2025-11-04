@@ -6,6 +6,7 @@ import (
 
 	"github.com/henmalib/whisper-notes/backend/audio"
 	"github.com/henmalib/whisper-notes/backend/config"
+	"github.com/henmalib/whisper-notes/backend/fronthelpers"
 	"github.com/henmalib/whisper-notes/backend/notes"
 	"github.com/henmalib/whisper-notes/backend/whisper"
 )
@@ -15,6 +16,7 @@ type App struct {
 	Whisper whisper.Whisper
 	Audio   audio.Audio
 	Notes   notes.Notes
+	Helpers fronthelpers.FrontHelpers
 }
 
 func NewApp() *App {
@@ -34,6 +36,7 @@ func (a *App) startup(ctx context.Context) {
 	a.Whisper = whisper.NewWhisper(ctx, configHelper)
 	a.Audio = audio.NewAudio()
 	a.Notes = *notes.NewNotes(ctx, configHelper)
+	a.Helpers = fronthelpers.NewHelpers(ctx, configHelper, &a.Whisper, &a.Notes)
 }
 
 func (a *App) Echo(str string) string {
