@@ -76,12 +76,7 @@ func (w *Whisper) GetModelLanguages(modelname string) ([]string, error) {
 	if err != nil {
 		return langs, err
 	}
-
 	defer model.Close()
-
-	if err != nil {
-		return langs, err
-	}
 
 	return model.Languages(), nil
 }

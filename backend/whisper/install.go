@@ -4,14 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-	"errors"
-	"io"
 
 	"github.com/henmalib/whisper-notes/backend/config"
 
@@ -150,7 +149,7 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 			n, err := resp.Body.Read(data)
 
 			if n > 0 {
-				m, werr := w.Write(data[:n]); 
+				m, werr := w.Write(data[:n])
 				if werr != nil {
 					return path, werr
 				}
@@ -166,7 +165,7 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 				}
 
 				return path, err
-			} 
+			}
 		}
 	}
 }
