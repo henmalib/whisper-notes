@@ -66,7 +66,7 @@ function SettingsPage() {
       <div className="flex flex-col gap-2">
         <RadioGroup
           onValueChange={(deviceId) => UpdateConfig("MicrophoneId", deviceId)}
-          defaultValue={devices.find((d) => d.selected)?.deviceId}
+          value={devices.find((d) => d.selected)?.deviceId}
         >
           {devices.map((device) => (
             <div key={device.deviceId} className="flex flex-row gap-2">

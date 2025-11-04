@@ -5,18 +5,39 @@ import (
 	"strings"
 
 	whisperCpp "github.com/ggerganov/whisper.cpp/bindings/go/pkg/whisper"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-func (w *Whisper) Process(modelname string, data []float32) (string, error) {
+func (w *Whisper) loadModel(modelname string) (whisperCpp.Model, error) {
 	modelPath, err := w.getModelPath(modelname)
 
 	if err != nil {
-		return "", fmt.Errorf("Unable to getModelPath %s: %w", modelname, err)
+		return nil, fmt.Errorf("Unable to getModelPath %s: %w", modelname, err)
 	}
 
 	model, err := whisperCpp.New(modelPath)
 	if err != nil {
-		return "", fmt.Errorf("Unable to load whisper model %s: %w", modelname, err)
+		return nil, fmt.Errorf("Unable to load whisper model %s: %w", modelname, err)
+	}
+
+	return model, nil
+}
+
+func (w *Whisper) Process(modelname string, data []float32, lang string, toastId string) (transcibedResult string, processErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if e, ok := r.(error); ok {
+				processErr = e
+			} else {
+				processErr = fmt.Errorf("panic: %v", r)
+			}
+		}
+	}()
+
+	model, err := w.loadModel(modelname)
+
+	if err != nil {
+		return "", err
 	}
 
 	defer model.Close()
@@ -28,19 +49,39 @@ func (w *Whisper) Process(modelname string, data []float32) (string, error) {
 		return "", fmt.Errorf("Unable to create model context: %w", err)
 	}
 
-	fmt.Println("IsMultilingual", model.IsMultilingual())
-	if modelContext.IsMultilingual() {
-		modelContext.SetLanguage("auto")
-	}
+	modelContext.SetTranslate(false)
+	modelContext.SetLanguage(lang)
+
+	modelContext.SetBeamSize(3)
+	modelContext.SetTemperature(0)
 
 	var sb strings.Builder
 
-	// TODO: take a look at the callbacks
 	if err = modelContext.Process(data, nil, func(s whisperCpp.Segment) {
 		sb.WriteString(s.Text)
-	}, nil); err != nil {
+	}, func(i int) {
+		fmt.Println(i)
+		runtime.EventsEmit(w.ctx, fmt.Sprintf("whisper:audio:%s:progress", toastId), i)
+	}); err != nil {
 		return "", fmt.Errorf("Unable to process audio file: %w", err)
 	}
 
 	return sb.String(), nil
+}
+
+func (w *Whisper) GetModelLanguages(modelname string) ([]string, error) {
+	var langs []string
+
+	model, err := w.loadModel(modelname)
+	if err != nil {
+		return langs, err
+	}
+
+	defer model.Close()
+
+	if err != nil {
+		return langs, err
+	}
+
+	return model.Languages(), nil
 }

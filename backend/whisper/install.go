@@ -2,6 +2,7 @@ package whisper
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -174,4 +175,18 @@ func downloadReport(ctx context.Context, count, total int64, modelName string) {
 	percentage := int8(count * 100 / total)
 
 	runtime.EventsEmit(ctx, fmt.Sprintf("whisper:download:%s", modelName), percentage)
+}
+
+func (w *Whisper) IsModelInstalled(modelname string) (bool, error) {
+	path, err := w.getModelPath(modelname)
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+
+	return true, nil
+
 }

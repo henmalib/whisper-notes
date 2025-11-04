@@ -11,6 +11,7 @@ import (
 
 type Config struct {
 	ModelPath    string `mapstructure:"ModelPath"`
+	NotesPath    string `mapstructure:"NotesPath"`
 	CurrentModel string `mapstructure:"CurrentModel"`
 
 	MicrophoneId string `mapstructure:"MicrophoneId"`
@@ -23,20 +24,27 @@ type ConfigHelper struct {
 func getDefault(appname string) *Config {
 	ModelPath := ""
 	defaultModel := "large-v3-turbo"
+	notesPath := ""
 
 	switch runtime.GOOS {
 	case "windows":
 		ModelPath = os.Getenv("AppData") + "\\" + appname + "\\models"
+		notesPath = os.Getenv("AppData") + "\\" + appname + "\\notes"
 	case "darwin", "linux":
 		ModelPath = "$HOME/.config/" + appname + "/models"
+		notesPath = "$HOME/.config/" + appname + "/notes"
 	}
 
 	viper.SetDefault("ModelPath", ModelPath)
 	viper.SetDefault("CurrentModel", defaultModel)
 
+	// TODO: instead of default, always ask user first
+	viper.SetDefault("NotesPath", notesPath)
+
 	return &Config{
 		CurrentModel: defaultModel,
 		ModelPath:    ModelPath,
+		NotesPath:    notesPath,
 	}
 }
 
