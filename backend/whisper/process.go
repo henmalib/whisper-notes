@@ -8,13 +8,8 @@ import (
 )
 
 func (w *Whisper) loadModel(modelname string) (whisperCpp.Model, error) {
-	modelPath, err := w.getModelPath(modelname)
-
-	if err != nil {
-		return nil, fmt.Errorf("Unable to getModelPath %s: %w", modelname, err)
-	}
-
-	isInstalled, e := w.IsModelInstalled(modelPath)
+	modelPath := w.getModelPath(modelname)
+	isInstalled, e := w.IsModelInstalled(modelname)
 
 	if !isInstalled || e != nil {
 		fmt.Println(e)

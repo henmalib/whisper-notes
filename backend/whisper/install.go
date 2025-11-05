@@ -62,12 +62,7 @@ func (w *Whisper) Download(model string) (string, error) {
 		return "", fmt.Errorf("Couldn't resolve model url: %w", err)
 	}
 
-	out, err := w.getModelPath(model)
-	if err != nil {
-		return "", fmt.Errorf("Couldn't get a model path: %w", err)
-	}
-
-	return download(w.ctx, url, model, out)
+	return download(w.ctx, url, model, w.getModelPath(model))
 }
 
 func urlForModel(model string) (string, error) {
@@ -88,12 +83,13 @@ func urlForModel(model string) (string, error) {
 	return url.String(), nil
 }
 
-func (w *Whisper) getModelPath(modelname string) (string, error) {
-	return os.ExpandEnv(
-			filepath.Join(w.config.GetConfig().ModelPath,
-				fmt.Sprintf("%s.bin", modelname)),
-		),
-		nil
+func (w *Whisper) getModelPath(modelname string) string {
+	p := os.ExpandEnv(
+		filepath.Join(w.config.GetConfig().ModelPath,
+			fmt.Sprintf("%s.bin", modelname)),
+	)
+
+	return p
 }
 
 func download(ctx context.Context, modelUrl, modelname, out string) (string, error) {
@@ -168,10 +164,7 @@ func downloadReport(ctx context.Context, count, total int64, modelName string) {
 }
 
 func (w *Whisper) IsModelInstalled(modelname string) (bool, error) {
-	path, err := w.getModelPath(modelname)
-	if err != nil {
-		return false, err
-	}
+	path := w.getModelPath(modelname)
 
 	if _, err := os.Stat(path); err != nil {
 		return false, err
