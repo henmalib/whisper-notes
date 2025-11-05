@@ -14,6 +14,12 @@ func (w *Whisper) loadModel(modelname string) (whisperCpp.Model, error) {
 		return nil, fmt.Errorf("Unable to getModelPath %s: %w", modelname, err)
 	}
 
+	isInstalled, _ := w.IsModelInstalled(modelPath)
+
+	if !isInstalled {
+		return nil, fmt.Errorf("Model %s is not installed", modelname)
+	}
+
 	model, err := whisperCpp.New(modelPath)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to load whisper model %s: %w", modelname, err)
