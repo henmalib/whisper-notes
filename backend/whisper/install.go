@@ -62,7 +62,12 @@ func (w *Whisper) Download(model string) (string, error) {
 		return "", fmt.Errorf("Couldn't resolve model url: %w", err)
 	}
 
-	return download(w.ctx, url, model, w.config.GetConfig().ModelPath)
+	out, err := w.getModelPath(model)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't get a model path: %w", err)
+	}
+
+	return download(w.ctx, url, model, out)
 }
 
 func urlForModel(model string) (string, error) {
@@ -84,13 +89,11 @@ func urlForModel(model string) (string, error) {
 }
 
 func (w *Whisper) getModelPath(modelname string) (string, error) {
-	modelUrl, err := urlForModel(modelname)
-
-	if err != nil {
-		return "", fmt.Errorf("Unable to load urlForModel %s: %w", modelname, err)
-	}
-
-	return os.ExpandEnv(filepath.Join(w.config.GetConfig().ModelPath, filepath.Base(modelUrl))), nil
+	return os.ExpandEnv(
+			filepath.Join(w.config.GetConfig().ModelPath,
+				fmt.Sprintf("%s.bin", modelname)),
+		),
+		nil
 }
 
 func download(ctx context.Context, modelUrl, modelname, out string) (string, error) {
@@ -111,22 +114,15 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 		return "", fmt.Errorf("%s: %s", modelUrl, resp.Status)
 	}
 
-	path := os.ExpandEnv(filepath.Join(out, filepath.Base(modelUrl)))
-	if info, err := os.Stat(path); err == nil && info.Size() == resp.ContentLength {
-		return "", fmt.Errorf("Skipping %s as it already exists", modelUrl)
-	}
-
-	fmt.Println(path, out, modelUrl)
-
-	dirPath := filepath.Dir(path)
+	dirPath := filepath.Dir(out)
 
 	if err = os.MkdirAll(dirPath, 0755); err != nil {
-		return "", fmt.Errorf("Error while creating models folder %s: %w", path, err)
+		return "", fmt.Errorf("Error while creating models folder %s: %w", out, err)
 	}
 
-	w, err := os.Create(path)
+	w, err := os.Create(out)
 	if err != nil {
-		return "", fmt.Errorf("Error while creating a file %s: %w", path, err)
+		return "", fmt.Errorf("Error while creating a file %s: %w", out, err)
 	}
 	defer w.Close()
 
@@ -137,7 +133,7 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 	for {
 		select {
 		case <-ctx.Done():
-			return path, ctx.Err()
+			return out, ctx.Err()
 		case <-ticker.C:
 			downloadReport(ctx, count, resp.ContentLength, modelname)
 		default:
@@ -146,7 +142,7 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 			if n > 0 {
 				m, werr := w.Write(data[:n])
 				if werr != nil {
-					return path, werr
+					return out, werr
 				}
 
 				count += int64(m)
@@ -156,10 +152,10 @@ func download(ctx context.Context, modelUrl, modelname, out string) (string, err
 				downloadReport(ctx, count, resp.ContentLength, modelname)
 
 				if errors.Is(err, io.EOF) {
-					return path, nil
+					return out, nil
 				}
 
-				return path, err
+				return out, err
 			}
 		}
 	}
