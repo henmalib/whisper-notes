@@ -62,7 +62,7 @@ function SettingsPage() {
   const devices = Route.useLoaderData();
 
   return (
-    <main>
+    <div className="h-full flex flex-col p-4">
       <div className="flex flex-col gap-2">
         <RadioGroup
           onValueChange={(deviceId) => UpdateConfig("MicrophoneId", deviceId)}
@@ -77,7 +77,7 @@ function SettingsPage() {
         </RadioGroup>
       </div>
 
-      <Collapsible className="w-full mt-16">
+      <Collapsible className="w-full mt-16 data-[state=open]:flex-1 data-[state=open]:flex data-[state=open]:flex-col data-[state=open]:min-h-0">
         <CollapsibleTrigger className="w-full">
           <div className="flex flex-row items-center justify-between p-2 px-4">
             <div>Open Source Components and Licenses</div>
@@ -87,7 +87,7 @@ function SettingsPage() {
           </div>
         </CollapsibleTrigger>
 
-        <CollapsibleContent>
+        <CollapsibleContent className="overflow-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -119,6 +119,6 @@ function SettingsPage() {
           </Table>
         </CollapsibleContent>
       </Collapsible>
-    </main>
+    </div>
   );
 }

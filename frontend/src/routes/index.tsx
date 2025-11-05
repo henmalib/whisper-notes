@@ -16,7 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  useNavigate,
+  useRouter,
+} from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
@@ -42,6 +47,7 @@ const Audio = ({
   disabled: boolean;
 }) => {
   const [isRecording, setRecording] = useState(false);
+  const navigate = useNavigate();
 
   const startRecording = async () => {
     setRecording(true);
@@ -73,7 +79,13 @@ const Audio = ({
     );
 
     toast.dismiss(toastId);
-    toast.success(noteId);
+    // toast.success(noteId);
+    navigate({
+      to: NoteRoute.to,
+      params: {
+        noteId,
+      },
+    });
   };
 
   if (!isRecording) {
@@ -95,10 +107,12 @@ const getLanguageForSelect = async (model: string) => {
   try {
     const langs = await GetModelLanguages(model);
 
-    const formattedLangs = langs.map((l) => ({
-      label: displayNames.of(l)!,
-      value: l,
-    }));
+    const formattedLangs = langs
+      .map((l) => ({
+        label: displayNames.of(l)!,
+        value: l,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
 
     if (langs.length >= 2) {
       return [
@@ -125,12 +139,15 @@ function App() {
     initialData: false,
     enabled: true,
     queryKey: ["model", "installed", selectedModel],
+    staleTime: 0,
     queryFn: () => IsModelInstalled(selectedModel),
   });
 
   const { data: modelLanguges } = useQuery({
-    queryKey: ["model", "language", selectedModel, isSelectedModelInstalled],
+    queryKey: ["model", "language", selectedModel],
     queryFn: () => getLanguageForSelect(selectedModel),
+    enabled: isSelectedModelInstalled,
+    meta: { persist: true },
     staleTime: Infinity,
   });
 
@@ -168,6 +185,8 @@ function App() {
       });
     });
   };
+
+  console.log(!isSelectedModelInstalled, !language);
 
   return (
     <div className="h-full flex flex-row gap-2">
