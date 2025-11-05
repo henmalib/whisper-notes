@@ -33,26 +33,29 @@ const RootLayout = () => {
   }, []);
 
   return (
-    <div id="App">
-      <QueryClientProvider client={queryClient}>
-        <Toaster />
-        <div className="p-2 flex gap-2 flex-row items-center justify-between px-8">
-          <Link to="/" className="[&.active]:font-bold">
+    <QueryClientProvider client={queryClient}>
+      <Toaster />
+      <div id="App">
+        <header className="p-2 flex gap-2 flex-row items-center justify-between px-8 border-b border-border shadow-sm">
+          <Link to="/" className="[&.active]:font-bold" preload="intent">
             Home
           </Link>
 
-          <Link to="/settings" className="[&.active]:font-bold">
+          <Link
+            to="/settings"
+            className="[&.active]:font-bold"
+            preload="intent"
+          >
             <Button variant="outline">
               <Cog className="size-4" />
             </Button>
           </Link>
-        </div>
-        <hr />
-        <main>
+        </header>
+        <main className="h-full overflow-hidden">
           <Outlet />
         </main>
-      </QueryClientProvider>
-    </div>
+      </div>
+    </QueryClientProvider>
   );
 };
 

@@ -3,7 +3,6 @@ import "../App.css";
 import {
   GetModels,
   Download,
-  Process,
   GetModelLanguages,
   IsModelInstalled,
 } from "@wailsjs/go/whisper/Whisper";
@@ -17,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
@@ -28,6 +27,7 @@ import {
 import { ListNotes } from "@wailsjs/go/notes/Notes";
 import { useQuery } from "@tanstack/react-query";
 import { List, RowComponentProps, useDynamicRowHeight } from "react-window";
+import { Route as NoteRoute } from "./notes/$noteId";
 
 const formatDownloadString = (model: string, progress: number) => {
   return `Downloading a model ${model}: ${progress}%`;
@@ -170,7 +170,7 @@ function App() {
   };
 
   return (
-    <div className="flex flex-row gap-2">
+    <div className="h-full flex flex-row gap-2">
       <NotesList />
 
       <div>
@@ -235,43 +235,51 @@ const Note = ({
   const { data: metadata } = useQuery({
     queryKey: ["notes", notes[index].id, "metadata"],
     queryFn: () => GetNoteMetadata(note),
+    staleTime: 1000 * 60 * 60,
   });
 
   return (
-    <div className="p-2" style={style}>
-      <h2 className="font-bold">{metadata?.title || "huh"}</h2>
-      <h4 className="">{new Date(note?.ModifyDate).toLocaleString()}</h4>
-    </div>
+    <Link
+      preload="intent"
+      className="p-2 hover:bg-muted"
+      to={NoteRoute.to}
+      params={{
+        noteId: note.id,
+      }}
+      style={style}
+    >
+      <h2 className="font-bold">{metadata?.title || "Loading"}</h2>
+      <h4 className="">{new Date(note.ModifyDate).toLocaleString()}</h4>
+    </Link>
   );
 };
 
 const NotesList = () => {
   const { notes } = Route.useLoaderData();
-  const router = useRouter();
 
   const rowHeight = useDynamicRowHeight({
-    defaultRowHeight: 50,
+    defaultRowHeight: 66,
   });
 
-  const AddNewNote = async () => {
-    await ProcessAndSaveNote([], "en", "toastId");
-    await router.invalidate();
-  };
+  // console.log(rowHeight.getRowHeight(0));
 
   return (
-    <div className="w-60 h-screen">
-      <List
-        className="bg-muted/60 h-full border-border border divide-border divide-y-2"
-        style={{
-          overscrollBehavior: "none",
-        }}
-        rowComponent={Note}
-        rowCount={notes.length}
-        rowHeight={rowHeight}
-        rowProps={{ notes: notes }}
-      />
-
-      {/* <Button onClick={() => AddNewNote()}>ADD NOTE</Button> */}
+    <div className="w-60 h-full overflow-hidden border border-border relative min-h-0">
+      <div className="absolute inset-0">
+        <List
+          style={{
+            width: "100%",
+            height: "100%",
+          }}
+          className="bg-muted/60 divide-border divide-y-2 h-full w-full overscroll-none"
+          rowComponent={Note}
+          rowCount={notes.length}
+          rowHeight={rowHeight}
+          overscanCount={5}
+          defaultHeight={1100}
+          rowProps={{ notes }}
+        />
+      </div>
     </div>
   );
 };

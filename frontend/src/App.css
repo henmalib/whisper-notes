@@ -3,11 +3,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-#app {
-    height: 100vh;
-    text-align: center;
-}
-
 @theme inline {
     --radius-sm: calc(var(--radius) - 4px);
     --radius-md: calc(var(--radius) - 2px);
@@ -126,6 +121,12 @@
 
 
 html, body, #App, #root {
-  @apply text-foreground bg-background min-h-dvh;
+  @apply text-foreground bg-background min-h-dvh max-w-screen overflow-x-hidden;
   overscroll-behavior: none;
+}
+
+#App {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto 1fr;
 }

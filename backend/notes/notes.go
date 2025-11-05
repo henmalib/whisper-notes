@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/henmalib/whisper-notes/backend/config"
@@ -55,6 +56,10 @@ func (n *Notes) ListNotes() ([]NoteInfo, error) {
 			})
 		}
 	}
+
+	sort.Slice(notes, func(i, j int) bool {
+		return notes[i].ModifyDate.Unix() > notes[j].ModifyDate.Unix()
+	})
 
 	return notes, nil
 }
