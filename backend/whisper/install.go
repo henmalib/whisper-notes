@@ -177,8 +177,8 @@ func (w *Whisper) IsModelInstalled(modelname string) (bool, error) {
 		return false, err
 	}
 
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return false, nil
+	if _, err := os.Stat(path); err != nil {
+		return false, err
 	}
 
 	return true, nil

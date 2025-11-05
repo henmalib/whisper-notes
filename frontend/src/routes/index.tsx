@@ -72,20 +72,23 @@ const Audio = ({
       });
     });
 
-    const noteId = await ProcessAndSaveNote(
-      audio,
-      selectedLanguage,
-      toastId.toString(),
-    );
+    try {
+      const noteId = await ProcessAndSaveNote(
+        audio,
+        selectedLanguage,
+        toastId.toString(),
+      );
 
-    toast.dismiss(toastId);
-    // toast.success(noteId);
-    navigate({
-      to: NoteRoute.to,
-      params: {
-        noteId,
-      },
-    });
+      // toast.success(noteId);
+      navigate({
+        to: NoteRoute.to,
+        params: {
+          noteId,
+        },
+      });
+    } finally {
+      toast.dismiss(toastId);
+    }
   };
 
   if (!isRecording) {
