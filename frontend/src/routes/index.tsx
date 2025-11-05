@@ -21,7 +21,10 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
-import { ProcessAndSaveNote } from "@wailsjs/go/fronthelpers/FrontHelpers";
+import {
+  GetNoteMetadata,
+  ProcessAndSaveNote,
+} from "@wailsjs/go/fronthelpers/FrontHelpers";
 import { ListNotes } from "@wailsjs/go/notes/Notes";
 import { useQuery } from "@tanstack/react-query";
 import { List, RowComponentProps, useDynamicRowHeight } from "react-window";
@@ -31,7 +34,6 @@ const formatDownloadString = (model: string, progress: number) => {
 };
 
 const Audio = ({
-  currentModel,
   selectedLanguage,
   disabled,
 }: {
@@ -64,15 +66,14 @@ const Audio = ({
       });
     });
 
-    const result = await Process(
-      currentModel,
+    const noteId = await ProcessAndSaveNote(
       audio,
       selectedLanguage,
       toastId.toString(),
     );
 
     toast.dismiss(toastId);
-    toast.success(result);
+    toast.success(noteId);
   };
 
   if (!isRecording) {
@@ -229,10 +230,17 @@ const Note = ({
 }: RowComponentProps<{
   notes: Awaited<ReturnType<typeof ListNotes>>;
 }>) => {
+  const note = notes[index];
+
+  const { data: metadata } = useQuery({
+    queryKey: ["notes", notes[index].id, "metadata"],
+    queryFn: () => GetNoteMetadata(note),
+  });
+
   return (
     <div className="p-2" style={style}>
-      <h2 className="font-bold">test</h2>
-      <h4 className="">test2</h4>
+      <h2 className="font-bold">{metadata?.title || "huh"}</h2>
+      <h4 className="">{new Date(note?.ModifyDate).toLocaleString()}</h4>
     </div>
   );
 };

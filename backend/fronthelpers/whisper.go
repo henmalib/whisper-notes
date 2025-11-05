@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/henmalib/whisper-notes/backend/audio"
 	"github.com/henmalib/whisper-notes/backend/config"
 	"github.com/henmalib/whisper-notes/backend/notes"
 	"github.com/henmalib/whisper-notes/backend/whisper"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 type FrontHelpers struct {
@@ -31,32 +33,33 @@ func NewHelpers(ctx context.Context, cfg config.ConfigLoader, whisper *whisper.W
 }
 
 // I want to support uploading audio later on, so having data as an arg is useful!
-func (h *FrontHelpers) ProcessAndSaveNote(data []float32, language, toastId string) error {
-	// modelname := h.cfg.GetConfig().CurrentModel
+func (h *FrontHelpers) ProcessAndSaveNote(data []float32, language, toastId string) (string, error) {
+	modelname := h.cfg.GetConfig().CurrentModel
 
-	// text, err := h.whisper.Process(modelname, data, language, func(i int) {
-	// 	runtime.EventsEmit(h.ctx, fmt.Sprintf("whisper:audio:%s:progress", toastId), i)
-	// })
+	text, err := h.whisper.Process(modelname, data, language, func(i int) {
+		runtime.EventsEmit(h.ctx, fmt.Sprintf("whisper:audio:%s:progress", toastId), i)
+	})
 
-	// if err != nil {
-	// 	return fmt.Errorf("Couldn't extract text from the audio: %w", err)
-	// }
+	if err != nil {
+		return "", fmt.Errorf("Couldn't extract text from the audio: %w", err)
+	}
 
-	// audioBytes, err := audio.Float32ToWavBytes(data)
-	// if err != nil {
-	// 	return fmt.Errorf("Couldn't convert audio to WAV: %w", err)
-	// }
-	//
+	audioBytes, err := audio.Float32ToWavBytes(data)
+	if err != nil {
+		return "", fmt.Errorf("Couldn't convert audio to WAV: %w", err)
+	}
 
 	noteId, err := h.noteCreator.CreateNote("Unnamed")
 	if err != nil {
-		return fmt.Errorf("Couldn't create a note: %w", err)
+		return "", fmt.Errorf("Couldn't create a note: %w", err)
 	}
 
 	note := h.noteCreator.FindNote(noteId)
 	if note == nil {
-		return fmt.Errorf("Newly created note wasn't found? NoteId: %s", noteId)
+		return "", fmt.Errorf("Newly created note wasn't found? NoteId: %s", noteId)
 	}
 
-	return nil
+	note.AddAudio(audioBytes, text)
+
+	return noteId, nil
 }

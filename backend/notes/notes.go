@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/henmalib/whisper-notes/backend/config"
+	"github.com/spf13/viper"
 )
 
 type Notes struct {
@@ -22,21 +23,6 @@ func NewNotes(ctx context.Context, cfg config.ConfigHelper) *Notes {
 		cfg: cfg,
 	}
 }
-
-type NoteInfo struct {
-	Id         string `json:"id"`
-	ModifyDate int64  `json:"ModifyDate"`
-	Size       int64  `json:"size"`
-}
-
-type Metadata struct {
-	Title string `json:"title"`
-}
-
-func (n *NoteInfo) ReadData() string                         { return "" }
-func (n *NoteInfo) ReadMetadata() string                     { return "" }
-func (n *NoteInfo) AddAudio(bytes []byte, text string) error { return nil }
-func (n *NoteInfo) ChangeContent(content string) error       { return nil }
 
 func (n *Notes) ListNotes() ([]NoteInfo, error) {
 	notes := []NoteInfo{}
@@ -65,7 +51,7 @@ func (n *Notes) ListNotes() ([]NoteInfo, error) {
 			notes = append(notes, NoteInfo{
 				Id:         info.Name(),
 				Size:       info.Size(),
-				ModifyDate: info.ModTime().UnixMilli(),
+				ModifyDate: info.ModTime(),
 			})
 		}
 	}
@@ -75,7 +61,7 @@ func (n *Notes) ListNotes() ([]NoteInfo, error) {
 func (n *Notes) FindNote(id string) *NoteInfo {
 	notePath := path.Join(n.cfg.GetConfig().NotesPath, id)
 
-	stat, err := os.Stat(path.Join(notePath, "_metadata.json"))
+	stat, err := os.Stat(notePath)
 	if err != nil {
 		return nil
 	}
@@ -83,7 +69,7 @@ func (n *Notes) FindNote(id string) *NoteInfo {
 	return &NoteInfo{
 		Id:         id,
 		Size:       stat.Size(),
-		ModifyDate: stat.ModTime().UnixMilli(),
+		ModifyDate: stat.ModTime(),
 	}
 }
 
@@ -116,4 +102,8 @@ func (n *Notes) CreateNote(title string) (string, error) {
 	}
 
 	return noteId, nil
+}
+
+func getNotePath(noteId string) string {
+	return path.Join(os.ExpandEnv(viper.GetString("NotesPath")), noteId)
 }
