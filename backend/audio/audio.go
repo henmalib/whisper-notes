@@ -163,7 +163,9 @@ func (a *Audio) StopCapturing() []float32 {
 	a.deviceUsed = nil
 	a.deviceInfo = nil
 
-	return bytesToFloat32LE(bytes)
+	audio := bytesToFloat32LE(bytes)
+
+	return DenoiseAudio(audio, whisperCpp.SampleRate)
 }
 
 func Float32ToWavBytes(data []float32) ([]byte, error) {

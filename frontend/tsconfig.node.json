@@ -2,8 +2,9 @@
   "compilerOptions": {
     "composite": true,
     "module": "ESNext",
-    "moduleResolution": "Node",
+    "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
+    "types": ["node"],
 
     "baseUrl": ".",
     "paths": {
@@ -11,7 +12,5 @@
       "@wailsjs": ["./wailsjs/*"]
     }
   },
-  "include": [
-    "vite.config.ts"
-  ]
+  "include": ["vite.config.ts"]
 }

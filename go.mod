@@ -6,6 +6,7 @@ require (
 	github.com/gen2brain/malgo v0.11.24
 	github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20251022095811-322c2adb753a
 	github.com/google/uuid v1.6.0
+	github.com/mjibson/go-dsp v0.0.0-20180508042940-11479a337f12
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v2 v2.10.2
 )
