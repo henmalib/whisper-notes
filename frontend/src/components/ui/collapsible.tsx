@@ -26,10 +26,12 @@ function CollapsibleTrigger({
 }
 
 function CollapsibleContent({
+  className,
   ...props
 }: React.ComponentProps<typeof CollapsiblePrimitive.CollapsibleContent>) {
   return (
     <CollapsiblePrimitive.CollapsibleContent
+      className={cn("CollapsibleContent", className)}
       data-slot="collapsible-content"
       {...props}
     />
