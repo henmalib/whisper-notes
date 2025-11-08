@@ -465,26 +465,17 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: windows-bin, path: dist }
 
-      - name: Extract tag message
-        id: tag_message
+      - name: Prepare release notes
         run: |
-          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
-          if [ -n "$TAG_MESSAGE" ]; then
-            echo "message<<EOF" >> $GITHUB_OUTPUT
-            echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
-            echo "EOF" >> $GITHUB_OUTPUT
-            echo "has_message=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_message=false" >> $GITHUB_OUTPUT
-          fi
+          git tag -l --format='%(contents)' ${{ github.ref_name }} > /tmp/release_body.md
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          body: ${{ steps.tag_message.outputs.has_message == 'true' && steps.tag_message.outputs.message || '' }}
-          generate_release_notes: ${{ steps.tag_message.outputs.has_message == 'false' }}
+          body_path: /tmp/release_body.md
+          generate_release_notes: true
           prerelease: false
           make_latest: true
           files: |
