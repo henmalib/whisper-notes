@@ -124,7 +124,6 @@ func (a *Audio) CaptureAudio(deviceId string) error {
 
 	err = device.Start()
 	if err != nil {
-		fmt.Println(2)
 		return fmt.Errorf("Couldn't record an audio: %w", err)
 	}
 

@@ -28,8 +28,6 @@ func NewNotes(ctx context.Context, cfg config.ConfigHelper) *Notes {
 func (n *Notes) ListNotes() ([]NoteInfo, error) {
 	notes := []NoteInfo{}
 
-	fmt.Println(n.cfg.GetConfig())
-
 	if err := os.MkdirAll(n.cfg.GetConfig().NotesPath, 0755); err != nil {
 		return notes, fmt.Errorf("Couldn't create notes directory: %w", err)
 	}
