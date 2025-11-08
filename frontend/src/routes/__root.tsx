@@ -7,6 +7,7 @@ import { useEffect } from "react";
 import { toast } from "sonner";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
+import "../App.css";
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import "../App.css";
 import {
   GetModels,
   Download,
@@ -16,22 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  createFileRoute,
-  Link,
-  useNavigate,
-  useRouter,
-} from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { StopCapturing, CaptureAudio } from "@wailsjs/go/audio/Audio";
 import { GetConfig, UpdateConfig } from "@wailsjs/go/config/ConfigHelper";
-import {
-  GetNoteMetadata,
-  ProcessAndSaveNote,
-} from "@wailsjs/go/fronthelpers/FrontHelpers";
-import { ListNotes } from "@wailsjs/go/notes/Notes";
+import { ProcessAndSaveNote } from "@wailsjs/go/fronthelpers/FrontHelpers";
 import { useQuery } from "@tanstack/react-query";
-import { List, RowComponentProps, useDynamicRowHeight } from "react-window";
 import { Route as NoteRoute } from "./notes/$noteId";
 
 const formatDownloadString = (model: string, progress: number) => {
@@ -131,12 +120,19 @@ const getLanguageForSelect = async (model: string) => {
 };
 
 function App() {
-  const [models, setModels] = useState<string[]>([]);
+  const {
+    config: { CurrentModel: model, PreferedLanguage },
+    models,
+  } = Route.useLoaderData();
+
   const [isDownloading, setDownloading] = useState(false);
-  const [language, setLanguage] = useState("en");
-  const [selectedModel, setSelectedModel] = useState(
-    Route.useLoaderData().model,
-  );
+  const [language, setCurrentLanguage] = useState(PreferedLanguage);
+  const [selectedModel, setSelectedModel] = useState(model);
+
+  const setLanguage = (lang: string) => {
+    UpdateConfig("PreferedLanguage", lang);
+    setCurrentLanguage(lang);
+  };
 
   const { data: isSelectedModelInstalled } = useQuery({
     initialData: false,
@@ -158,12 +154,6 @@ function App() {
     setSelectedModel(model);
     UpdateConfig("CurrentModel", model);
   };
-
-  useEffect(() => {
-    GetModels().then((models) => {
-      setModels(models);
-    });
-  }, []);
 
   const startDownload = () => {
     setDownloading(true);
@@ -189,128 +179,61 @@ function App() {
     });
   };
 
-  console.log(!isSelectedModelInstalled, !language);
-
   return (
-    <div className="h-full flex flex-row gap-2">
-      <NotesList />
+    <div>
+      <Select
+        onValueChange={setModel}
+        disabled={isDownloading}
+        value={selectedModel}
+      >
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Select a model" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {models.map((model) => (
+              <SelectItem key={model} value={model}>
+                {model}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
 
-      <div>
-        <Select
-          onValueChange={setModel}
-          disabled={isDownloading}
-          value={selectedModel}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select a model" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {models.map((model) => (
-                <SelectItem key={model} value={model}>
-                  {model}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+      {/* TODO: Display Loader */}
+      <Select onValueChange={setLanguage} value={language}>
+        <SelectTrigger className="w-[180px]">
+          <SelectValue placeholder="Select a Language" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectGroup>
+            {(modelLanguges || []).map(({ label, value }) => (
+              <SelectItem key={label} value={value}>
+                {label}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
 
-        {/* TODO: Display Loader */}
-        <Select onValueChange={setLanguage} value={language}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Select a Language" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              {(modelLanguges || []).map(({ label, value }) => (
-                <SelectItem key={label} value={value}>
-                  {label}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
+      <Button disabled={isDownloading} onClick={startDownload}>
+        Download
+      </Button>
 
-        <Button disabled={isDownloading} onClick={startDownload}>
-          Download
-        </Button>
-
-        <Audio
-          disabled={!isSelectedModelInstalled || !language}
-          currentModel={selectedModel}
-          selectedLanguage={language}
-        />
-      </div>
+      <Audio
+        disabled={!isSelectedModelInstalled || !language}
+        currentModel={selectedModel}
+        selectedLanguage={language}
+      />
     </div>
   );
 }
 
-const Note = ({
-  index,
-  notes,
-  style,
-}: RowComponentProps<{
-  notes: Awaited<ReturnType<typeof ListNotes>>;
-}>) => {
-  const note = notes[index];
-
-  const { data: metadata } = useQuery({
-    queryKey: ["notes", notes[index].id, "metadata"],
-    queryFn: () => GetNoteMetadata(note),
-    staleTime: 1000 * 60 * 60,
-  });
-
-  return (
-    <Link
-      preload="intent"
-      className="p-2 hover:bg-muted"
-      to={NoteRoute.to}
-      params={{
-        noteId: note.id,
-      }}
-      style={style}
-    >
-      <h2 className="font-bold">{metadata?.title || "Loading"}</h2>
-      <h4 className="">{new Date(note.ModifyDate).toLocaleString()}</h4>
-    </Link>
-  );
-};
-
-const NotesList = () => {
-  const { notes } = Route.useLoaderData();
-
-  const rowHeight = useDynamicRowHeight({
-    defaultRowHeight: 66,
-  });
-
-  // console.log(rowHeight.getRowHeight(0));
-
-  return (
-    <div className="w-60 h-full overflow-hidden border border-border relative min-h-0">
-      <div className="absolute inset-0">
-        <List
-          style={{
-            width: "100%",
-            height: "100%",
-          }}
-          className="bg-muted/60 divide-border divide-y-2 h-full w-full overscroll-none"
-          rowComponent={Note}
-          rowCount={notes.length}
-          rowHeight={rowHeight}
-          overscanCount={5}
-          defaultHeight={1100}
-          rowProps={{ notes }}
-        />
-      </div>
-    </div>
-  );
-};
-
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/_main/")({
   component: App,
   async loader() {
-    const [config, notes] = await Promise.all([GetConfig(), ListNotes()]);
+    const [config, models] = await Promise.all([GetConfig(), GetModels()]);
 
-    return { model: config.CurrentModel, notes: notes };
+    return { config, models };
   },
 });

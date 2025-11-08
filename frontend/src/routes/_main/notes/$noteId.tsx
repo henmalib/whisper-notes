@@ -65,7 +65,7 @@ export function AudioPlayer(audio: notes.AudioFile) {
   );
 }
 
-export const Route = createFileRoute("/notes/$noteId")({
+export const Route = createFileRoute("/_main/notes/$noteId")({
   async loader(ctx) {
     const { noteId } = ctx.params;
 
@@ -89,12 +89,12 @@ function RouteComponent() {
   const { metadata, audios } = Route.useLoaderData();
 
   return (
-    <div>
+    <div className="w-full">
       <h3>{metadata.title}</h3>
 
-      <div className="p-4">
+      <div className="p-4 w-full">
         {audios.map((a, index) => (
-          <AudioPlayer {...a} />
+          <AudioPlayer key={index} {...a} />
         ))}
       </div>
     </div>

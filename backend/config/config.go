@@ -16,7 +16,8 @@ type Config struct {
 	NotesPath    string `mapstructure:"NotesPath"`
 	CurrentModel string `mapstructure:"CurrentModel"`
 
-	MicrophoneId string `mapstructure:"MicrophoneId"`
+	MicrophoneId     string `mapstructure:"MicrophoneId"`
+	PreferedLanguage string `mapstructure:"PreferedLanguage"`
 }
 
 type ConfigHelper struct {
@@ -43,6 +44,7 @@ func init() {
 
 	viper.Set("ModelPath", ModelPath)
 	viper.Set("CurrentModel", defaultModel)
+	viper.Set("PreferedLanguage", "en")
 
 	// TODO: instead of default, always ask user first
 	viper.Set("NotesPath", notesPath)
@@ -76,7 +78,6 @@ func (c ConfigHelper) LoadConfig() error {
 
 func (c ConfigHelper) GetConfig() *Config {
 	var cfg Config
-	// We just ignore the error and use default config if the format is somehow wrong
 	_ = viper.Unmarshal(&cfg)
 
 	cfg.ModelPath = os.ExpandEnv(cfg.ModelPath)

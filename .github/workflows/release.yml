@@ -1,0 +1,494 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: whisper-notes
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Setup compiler wrappers
+        run: |
+          # Linux: use system gcc/g++
+          cat > /tmp/zig-cc << 'EOF'
+          #!/bin/bash
+          exec gcc "$@"
+          EOF
+          cat > /tmp/zig-c++ << 'EOF'
+          #!/bin/bash
+          exec g++ "$@"
+          EOF
+          chmod +x /tmp/zig-cc /tmp/zig-c++
+
+      - name: Install platform dependencies
+        run: |
+          sudo rm /var/lib/man-db/auto-update
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build pkg-config \
+            libwebkit2gtk-4.1-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libvulkan-dev glslc upx-ucl
+
+      - name: Cache whisper static libs
+        uses: actions/cache@v4
+        id: linux-whisper-cache
+        with:
+           path: whisper.cpp/build_go
+           key: ${{ runner.os }}-linux-whisper-build-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**','.github/workflows/release.yml') }}
+
+      - name: Build whisper.cpp bindings
+        if: steps.linux-whisper-cache.outputs.cache-hit != 'true'
+        env:
+          CC: /tmp/zig-cc
+          CXX: /tmp/zig-c++
+        run: |
+          BUILD_DIR=whisper.cpp/build_go
+          
+          # Build CMake command with common flags
+          CMAKE_ARGS=(
+            -S whisper.cpp
+            -B "${BUILD_DIR}"
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_SHARED_LIBS=OFF
+            -DWHISPER_BUILD_TESTS=OFF
+            -DWHISPER_BUILD_EXAMPLES=OFF
+            -DGGML_BUILD_TESTS=OFF
+            -DGGML_BUILD_EXAMPLES=OFF
+            -DGGML_VULKAN=ON
+            -DCMAKE_C_COMPILER=/tmp/zig-cc
+            -DCMAKE_CXX_COMPILER=/tmp/zig-c++
+          )
+          
+          cmake "${CMAKE_ARGS[@]}"
+          cmake --build "${BUILD_DIR}" --config Release
+          
+          # Ensure lib prefix for Go linker
+          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src"; do
+            for lib in whisper ggml ggml-base ggml-cpu; do
+              [ -f "$dir/${lib}.a" ] && cp "$dir/${lib}.a" "$dir/lib${lib}.a" || true
+            done
+          done
+
+      - name: Build app
+        env:
+          GOOS: linux
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: |
+          ROOT="$(pwd)"
+          
+          # Use the wrapper scripts
+          export CC=/tmp/zig-cc
+          export CXX=/tmp/zig-c++
+          
+          # Linux system gcc - dynamically build library paths and flags
+          export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include"
+          
+          # Build -L flags for all directories containing .a files
+          LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src"
+          for backend_dir in "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/; do
+            [ -d "$backend_dir" ] && LDFLAGS="$LDFLAGS -L$backend_dir"
+          done
+          
+          # Build -l flags for all .a libraries found
+          LIBS=""
+          for afile in "$ROOT/whisper.cpp/build_go/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/*.a; do
+            [ -f "$afile" ] && LIBS="$LIBS -l$(basename "$afile" .a | sed 's/^lib//')"
+          done
+          
+          export CGO_LDFLAGS="$LDFLAGS $LIBS -lvulkan -lstdc++"
+          
+          chmod +x ./build.sh
+          ./build.sh -platform "linux/amd64" -o "${APP_NAME}-linux-amd64-vulkan" -tags webkit2_41 -upxflags="-9 --lzma"
+
+      - name: Upload Linux binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-bin
+          path: build/bin/${{ env.APP_NAME }}-linux-amd64-vulkan
+      
+      - name: Upload Wails bindings
+        uses: actions/upload-artifact@v4
+        with:
+          name: wailsjs-bindings
+          path: frontend/wailsjs/
+
+  windows-setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Install platform dependencies
+        run: | 
+          sudo rm /var/lib/man-db/auto-update
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config glslc \
+                      mingw-w64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64 
+          #
+          # Switch to posix threading model for C++11 std::mutex support
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+      - name: Setup compiler wrappers
+        run: |
+          # Windows: use system mingw-w64 for cross-compilation
+          cat > /tmp/zig-cc << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-gcc "$@"
+          EOF
+          cat > /tmp/zig-c++ << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-g++ "$@"
+          EOF
+          chmod +x /tmp/zig-cc /tmp/zig-c++
+
+      - name: Cache Vulkan SDK
+        uses: actions/cache@v4
+        id: vulkan-cache
+        with:
+          path: /opt/windows-vulkan-sdk
+          key: vulkan-sdk-1.4.328-mingw-${{ runner.os }}-${{ hashFiles('.github/workflows/release.yml') }}
+
+      - name: Setup Windows Vulkan SDK
+        if: steps.vulkan-cache.outputs.cache-hit != 'true'
+        run: |
+          # Download and extract headers
+          wget https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.328.tar.gz
+          tar xzf v1.4.328.tar.gz
+          
+          # Download and extract loader source
+          wget https://github.com/KhronosGroup/Vulkan-Loader/archive/refs/tags/v1.4.328.tar.gz -O vulkan-loader.tar.gz
+          tar xzf vulkan-loader.tar.gz
+          
+          # Setup directories
+          sudo mkdir -p /opt/windows-vulkan-sdk
+          
+          # Create MinGW toolchain file
+          cat > mingw-toolchain.cmake << 'EOF'
+          set(CMAKE_SYSTEM_NAME Windows)
+          set(CMAKE_SYSTEM_PROCESSOR x86_64)
+          set(CMAKE_C_COMPILER x86_64-w64-mingw32-gcc)
+          set(CMAKE_CXX_COMPILER x86_64-w64-mingw32-g++)
+          set(CMAKE_RC_COMPILER x86_64-w64-mingw32-windres)
+          set(CMAKE_FIND_ROOT_PATH /usr/x86_64-w64-mingw32)
+          set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
+          set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+          set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+          EOF
+          
+          # Build and install Vulkan-Headers first (generates CMake package config)
+          cd Vulkan-Headers-1.4.328
+          cmake -DCMAKE_TOOLCHAIN_FILE=../mingw-toolchain.cmake \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/opt/windows-vulkan-sdk \
+                -S . -B build-headers
+          cmake --build build-headers --config Release
+          sudo cmake --install build-headers
+          cd ..
+          
+          cd Vulkan-Loader-1.4.328
+          cmake -DCMAKE_TOOLCHAIN_FILE=../mingw-toolchain.cmake \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX=/opt/windows-vulkan-sdk \
+                -DCMAKE_PREFIX_PATH=/opt/windows-vulkan-sdk \
+                -DBUILD_SHARED_LIBS=OFF \
+                -DUSE_MASM=OFF \
+                -S . -B build
+           cmake --build build --config Release
+           sudo cmake --install build --prefix /opt/windows-vulkan-sdk
+
+           # Copy the installed import library to the expected name
+           sudo cp /opt/windows-vulkan-sdk/lib/libvulkan-1.dll.a /opt/windows-vulkan-sdk/lib/libvulkan.a
+           cd ..
+           
+           # Cleanup
+           rm -rf Vulkan-Headers-1.4.328 Vulkan-Loader-1.4.328 *.tar.gz mingw-toolchain.cmake
+
+      - name: Package Vulkan SDK
+        run: |
+          cd /opt
+          sudo tar czf windows-vulkan-sdk.tar.gz windows-vulkan-sdk/
+
+      - name: Upload Vulkan SDK artifact
+        uses: actions/upload-artifact@v4
+        with:
+           name: windows-vulkan-sdk
+           path: /opt/windows-vulkan-sdk.tar.gz
+           retention-days: 1
+
+      - name: Cache whisper static libs
+        uses: actions/cache@v4
+        id: windows-whisper-cache
+        with:
+           path: whisper.cpp/build_go
+           key: ${{ runner.os }}-windows-whisper-build-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**','.github/workflows/release.yml') }}
+
+      - name: Build whisper.cpp bindings
+        if: steps.windows-whisper-cache.outputs.cache-hit != 'true'
+        env:
+          CC: /tmp/zig-cc
+          CXX: /tmp/zig-c++
+          WINDOWS_VULKAN_SDK: /opt/windows-vulkan-sdk
+        run: |
+          BUILD_DIR=whisper.cpp/build_go
+          
+          # Build CMake command with common flags
+          CMAKE_ARGS=(
+            -S whisper.cpp
+            -B "${BUILD_DIR}"
+            -DCMAKE_BUILD_TYPE=Release
+            -DBUILD_SHARED_LIBS=OFF
+            -DWHISPER_BUILD_TESTS=OFF
+            -DWHISPER_BUILD_EXAMPLES=OFF
+            -DGGML_BUILD_TESTS=OFF
+            -DGGML_BUILD_EXAMPLES=OFF
+            -DGGML_VULKAN=ON
+            -DVulkan_INCLUDE_DIR="$WINDOWS_VULKAN_SDK/include"
+            -DVulkan_LIBRARY="$WINDOWS_VULKAN_SDK/lib/libvulkan.a"
+            -DCMAKE_C_COMPILER=/tmp/zig-cc
+            -DCMAKE_CXX_COMPILER=/tmp/zig-c++
+            -DCMAKE_SYSTEM_NAME=Windows
+          )
+          
+          # Target Windows 7 to avoid power throttling APIs not in mingw-w64 headers
+          # mingw-w64-posix provides C++11 threading support
+          WIN_FLAGS="-D_WIN32_WINNT=0x0601"
+          CMAKE_ARGS+=(-DCMAKE_C_FLAGS="$WIN_FLAGS -I$WINDOWS_VULKAN_SDK/include")
+          CMAKE_ARGS+=(-DCMAKE_CXX_FLAGS="$WIN_FLAGS -std=c++11 -I$WINDOWS_VULKAN_SDK/include")
+          
+          cmake "${CMAKE_ARGS[@]}"
+          cmake --build "${BUILD_DIR}" --config Release
+          
+          # Ensure lib prefix for Go linker - dynamically find all .a files
+          for dir in "${BUILD_DIR}/src" "${BUILD_DIR}/ggml/src" "${BUILD_DIR}/ggml/src"/ggml-*/; do
+            [ ! -d "$dir" ] && continue
+            for afile in "$dir"/*.a; do
+              [ ! -f "$afile" ] && continue
+              basename=$(basename "$afile")
+              # Add lib prefix if not already present
+              if [[ ! "$basename" =~ ^lib ]]; then
+                cp "$afile" "$dir/lib${basename}"
+              fi
+            done
+          done
+
+  windows-build:
+    runs-on: ubuntu-latest
+    needs: [build-linux, windows-setup]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+
+      - name: Download Wails bindings from Linux build
+        uses: actions/download-artifact@v4
+        with:
+          name: wailsjs-bindings
+          path: frontend/wailsjs/
+
+      - name: Install platform dependencies
+        run: |
+          sudo rm /var/lib/man-db/auto-update
+          export DEBIAN_FRONTEND=noninteractive
+          sudo apt-get update
+          sudo apt-get install -y upx-ucl mingw-w64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
+          #
+          # Switch to posix threading model for C++11 std::mutex support
+          sudo update-alternatives --set x86_64-w64-mingw32-gcc /usr/bin/x86_64-w64-mingw32-gcc-posix
+          sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
+
+      - name: Setup compiler wrappers
+        run: |
+          # Windows: use system mingw-w64 for cross-compilation
+          cat > /tmp/zig-cc << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-gcc "$@"
+          EOF
+          cat > /tmp/zig-c++ << 'EOF'
+          #!/bin/bash
+          exec x86_64-w64-mingw32-g++ "$@"
+          EOF
+          chmod +x /tmp/zig-cc /tmp/zig-c++
+
+      - name: Download Vulkan SDK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-vulkan-sdk
+          path: /tmp
+
+      - name: Extract Vulkan SDK
+        run: |
+          sudo mkdir -p /opt
+          sudo tar xzf /tmp/windows-vulkan-sdk.tar.gz -C /opt
+          echo "WINDOWS_VULKAN_SDK=/opt/windows-vulkan-sdk" >> $GITHUB_ENV
+
+      - name: Cache whisper static libs
+        uses: actions/cache@v4
+        id: windows-whisper-cache
+        with:
+           path: whisper.cpp/build_go
+           key: ${{ runner.os }}-windows-whisper-build-${{ hashFiles('whisper.cpp/**','whisper.cpp/bindings/go/**','.github/workflows/release.yml') }}
+
+      - name: Build app
+        env:
+          GOOS: windows
+          GOARCH: amd64
+          CGO_ENABLED: 1
+        run: |
+          ROOT="$(pwd)"
+          
+          # Use the wrapper scripts
+          export CC=/tmp/zig-cc
+          export CXX=/tmp/zig-c++
+          
+          # mingw-w64-posix: C++11 for std::mutex, winpthread and winsock2 for Windows - dynamically build library paths and flags
+          export CGO_CFLAGS="-I$ROOT/whisper.cpp/include -I$ROOT/whisper.cpp/ggml/include -I$WINDOWS_VULKAN_SDK/include"
+          export CGO_CXXFLAGS="-std=c++11"
+          
+           # Build -L flags for all directories containing .a files
+           LDFLAGS="-L$ROOT/whisper.cpp/build_go/src -L$ROOT/whisper.cpp/build_go/ggml/src"
+           for backend_dir in "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/; do
+             [ -d "$backend_dir" ] && LDFLAGS="$LDFLAGS -L$backend_dir"
+           done
+
+           # Dynamically find all .a libraries
+           ALL_LIBS=""
+           for afile in "$ROOT/whisper.cpp/build_go/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/*.a "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/*.a; do
+             [ -f "$afile" ] && ALL_LIBS="$ALL_LIBS -l$(basename "$afile" .a | sed 's/^lib//')"
+           done
+
+           # Use linker groups to handle circular dependencies and resolve all symbols
+           export CGO_LDFLAGS="$LDFLAGS -Wl,--start-group $ALL_LIBS -Wl,--end-group -L$WINDOWS_VULKAN_SDK/lib -lvulkan -lstdc++ -lgomp -lwinpthread -lws2_32"
+
+           # Ensure Vulkan SDK library path is in LIBRARY_PATH for the linker
+           export LIBRARY_PATH="$WINDOWS_VULKAN_SDK/lib:$LIBRARY_PATH"
+
+           # Debug: Verify Vulkan SDK is properly set up
+           echo "WINDOWS_VULKAN_SDK=$WINDOWS_VULKAN_SDK"
+           ls -la "$WINDOWS_VULKAN_SDK/lib/" 2>/dev/null || echo "Vulkan SDK lib directory not found"
+           test -f "$WINDOWS_VULKAN_SDK/lib/libvulkan.a" && echo "✓ libvulkan.a found" || echo "✗ libvulkan.a NOT found"
+
+           # Debug: Show what libraries are being found
+           echo "Library search paths: $LDFLAGS"
+           echo "Found libraries: $ALL_LIBS"
+           echo "Backend directories:"
+           for backend_dir in "$ROOT/whisper.cpp/build_go/ggml/src"/ggml-*/; do
+             [ -d "$backend_dir" ] && echo "  $backend_dir:" && ls -la "$backend_dir"/*.a 2>/dev/null || echo "  $backend_dir: no .a files"
+           done
+
+           chmod +x ./build.sh
+          # Skip bindings - use the ones from Linux build, otherwise the build will explode
+          ./build.sh -platform "windows/amd64" -o "${APP_NAME}-windows-amd64-vulkan.exe" -ldflags '-linkmode external -extldflags "-static"' -skipbindings -upxflags="-9 --lzma"
+
+      - name: Upload Windows binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-bin
+          path: build/bin/${{ env.APP_NAME }}-windows-amd64-vulkan.exe
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [build-linux, windows-build]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0, submodules: false }
+
+      - uses: actions/download-artifact@v4
+        with: { name: linux-bin, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-bin, path: dist }
+
+      - name: Extract tag message
+        id: tag_message
+        run: |
+          TAG_MESSAGE=$(git tag -l --format='%(contents)' ${{ github.ref_name }})
+          if [ -n "$TAG_MESSAGE" ]; then
+            echo "message<<EOF" >> $GITHUB_OUTPUT
+            echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+            echo "has_message=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_message=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: ${{ steps.tag_message.outputs.has_message == 'true' && steps.tag_message.outputs.message || '' }}
+          generate_release_notes: ${{ steps.tag_message.outputs.has_message == 'false' }}
+          prerelease: false
+          make_latest: true
+          files: |
+            dist/${{ env.APP_NAME }}-linux-amd64-vulkan
+            dist/${{ env.APP_NAME }}-windows-amd64-vulkan.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
