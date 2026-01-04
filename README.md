@@ -1,3 +1,7 @@
+<p align="center">
+    <img src="https://count.henmalib.dev/@henmalib-ai-notes-readme?name=henmalib-ai-notes-readme&theme=original-new&padding=7&offset=0&align=center&scale=1&pixelated=1&darkmode=auto" />
+</p>
+
 ## License
 
 This project is licensed under the **PolyForm Noncommercial License 1.0.0**.
