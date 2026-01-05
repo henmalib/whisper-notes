@@ -57,7 +57,6 @@ jobs:
 
       - name: Install platform dependencies
         run: |
-          sudo rm /var/lib/man-db/auto-update
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update
           sudo apt-get install -y \
@@ -167,7 +166,6 @@ jobs:
 
       - name: Install platform dependencies
         run: | 
-          sudo rm /var/lib/man-db/auto-update
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build pkg-config glslc \
@@ -355,7 +353,6 @@ jobs:
 
       - name: Install platform dependencies
         run: |
-          sudo rm /var/lib/man-db/auto-update
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update
           sudo apt-get install -y upx-ucl mingw-w64 gcc-mingw-w64-x86-64 g++-mingw-w64-x86-64
