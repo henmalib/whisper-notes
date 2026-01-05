@@ -23,7 +23,11 @@ func (n *NoteInfo) getPath() string {
 	return getNotePath(n.Id)
 }
 
-func (n *NoteInfo) ReadData() string { return "" }
+func (n *NoteInfo) ReadData() (string, error) {
+	// TODO: read actuall data
+	return "# Header", nil
+}
+
 func (n *NoteInfo) ReadMetadata() (*Metadata, error) {
 	path := path.Join(n.getPath(), "_metadata.json")
 

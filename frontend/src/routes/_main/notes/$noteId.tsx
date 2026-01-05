@@ -18,6 +18,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import {
   GetNoteMetadata,
   GetNoteAudios,
+  GetNoteText,
 } from "@wailsjs/go/fronthelpers/FrontHelpers";
 import { notes } from "@wailsjs/go/models";
 import { FindNote } from "@wailsjs/go/notes/Notes";
@@ -66,37 +67,51 @@ export function AudioPlayer(audio: notes.AudioFile) {
 }
 
 export const Route = createFileRoute("/_main/notes/$noteId")({
-  async loader(ctx) {
-    const { noteId } = ctx.params;
-
+  remountDeps({ params }) {
+    return params;
+  },
+  async loader({ params: { noteId } }) {
     const note = await FindNote(noteId);
-    const [metadata, audios] = await Promise.all([
+    const [metadata, audios, text] = await Promise.all([
       GetNoteMetadata(note),
       GetNoteAudios(note),
+      GetNoteText(note),
     ]);
 
     return {
       note,
       metadata,
       audios,
+      text,
     };
   },
   component: RouteComponent,
+  shouldReload: true,
 });
 
 function RouteComponent() {
-  const { noteId } = Route.useParams();
-  const { metadata, audios } = Route.useLoaderData();
+  const { metadata, audios, text } = Route.useLoaderData();
+  const [title, setTitle] = useState(metadata.title);
 
   return (
     <div className="w-full">
-      <h3>{metadata.title}</h3>
+      <div className="w-full flex">
+        <span
+          className="focus-visible:ring-0 rounded-none text-xl! min-h-12! font-bold resize-none w-full p-4 outline-none border-b-2 border-accent border-solid"
+          contentEditable
+          onInput={(e) => setTitle(e.currentTarget.innerHTML)}
+        >
+          <div dangerouslySetInnerHTML={{ __html: title }}></div>
+        </span>
+      </div>
 
       <div className="p-4 w-full">
         {audios.map((a, index) => (
           <AudioPlayer key={index} {...a} />
         ))}
       </div>
+
+      {text}
     </div>
   );
 }

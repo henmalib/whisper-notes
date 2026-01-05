@@ -31,3 +31,7 @@ func (h *FrontHelpers) GetNoteAudios(n *notes.NoteInfo) ([]notes.AudioFile, erro
 
 	return files, nil
 }
+
+func (h *FrontHelpers) GetNoteText(n *notes.NoteInfo) (string, error) {
+	return n.ReadData()
+}

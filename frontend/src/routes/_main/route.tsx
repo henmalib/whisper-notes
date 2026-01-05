@@ -17,7 +17,7 @@ export const Route = createFileRoute("/_main")({
 
 function RouteComponent() {
   return (
-    <div className="h-full flex flex-row gap-2 w-full">
+    <div className="h-full flex flex-row w-full">
       <NotesList />
 
       <div className="w-full">
@@ -64,8 +64,6 @@ const NotesList = () => {
   const rowHeight = useDynamicRowHeight({
     defaultRowHeight: 66,
   });
-
-  // console.log(rowHeight.getRowHeight(0));
 
   return (
     <div className="w-60 h-full overflow-hidden border border-border relative min-h-0">
