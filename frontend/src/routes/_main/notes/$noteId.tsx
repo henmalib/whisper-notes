@@ -1,3 +1,4 @@
+import { Editor } from "@/components/editor";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -94,7 +95,7 @@ function RouteComponent() {
   const [title, setTitle] = useState(metadata.title);
 
   return (
-    <div className="w-full">
+    <div className="w-full h-full">
       <div className="w-full flex">
         <span
           className="focus-visible:ring-0 rounded-none text-xl! min-h-12! font-bold resize-none w-full p-4 outline-none border-b-2 border-accent border-solid"
@@ -111,7 +112,7 @@ function RouteComponent() {
         ))}
       </div>
 
-      {text}
+      <Editor />
     </div>
   );
 }

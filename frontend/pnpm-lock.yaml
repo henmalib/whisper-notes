@@ -8,12 +8,30 @@ importers:
 
   .:
     dependencies:
+      '@lexical/code':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@lexical/extension':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@lexical/link':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@lexical/list':
+        specifier: ^0.39.0
+        version: 0.39.0
       '@lexical/markdown':
         specifier: ^0.39.0
         version: 0.39.0
       '@lexical/react':
         specifier: ^0.39.0
         version: 0.39.0(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(yjs@13.6.29)
+      '@lexical/rich-text':
+        specifier: ^0.39.0
+        version: 0.39.0
+      '@lexical/tailwind':
+        specifier: ^0.39.0
+        version: 0.39.0
       '@radix-ui/react-collapsible':
         specifier: ^1.1.12
         version: 1.1.12(@types/react-dom@19.2.2(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -522,6 +540,9 @@ packages:
 
   '@lexical/table@0.39.0':
     resolution: {integrity: sha512-1eH11kV4bJ0fufCYl8DpE19kHwqUI8Ev5CZwivfAtC3ntwyNkeEpjCc0pqeYYIWN/4rTZ5jgB3IJV4FntyfCzw==}
+
+  '@lexical/tailwind@0.39.0':
+    resolution: {integrity: sha512-A6cHSxx+RR3oj4Ccm+UmcIRNbKR0Snh2hlRe+uZwinWQQ5ZEAyBzRtKIqg/1UhfceOPVaGl2ZIK74JTh4hqAFw==}
 
   '@lexical/text@0.39.0':
     resolution: {integrity: sha512-fcIgejtIgfMAkxio6BO1eLA2eb4oRIFoUVA2jAXdCaLVHrG/cizitbygPrgWnWd8nt1WlMuS4lxa0PJl7h7Lqg==}
@@ -2274,6 +2295,11 @@ snapshots:
       '@lexical/clipboard': 0.39.0
       '@lexical/extension': 0.39.0
       '@lexical/utils': 0.39.0
+      lexical: 0.39.0
+
+  '@lexical/tailwind@0.39.0':
+    dependencies:
+      '@lexical/extension': 0.39.0
       lexical: 0.39.0
 
   '@lexical/text@0.39.0':

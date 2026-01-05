@@ -1,44 +1,83 @@
-import { $getRoot, $getSelection } from "lexical";
-import { useEffect } from "react";
-
-import { AutoFocusPlugin } from "@lexical/react/LexicalAutoFocusPlugin";
-import { LexicalComposer } from "@lexical/react/LexicalComposer";
-import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
-import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
-import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
+import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
+import { HeadingNode, QuoteNode, RichTextExtension } from "@lexical/rich-text";
+import { ListNode, ListItemNode } from "@lexical/list";
+import { CodeNode, CodeHighlightNode, CodeExtension } from "@lexical/code";
+import {
+  LinkNode,
+  AutoLinkNode,
+  AutoLinkExtension,
+  ClickableLinkExtension,
+  LinkExtension,
+} from "@lexical/link";
+import { TailwindExtension } from "@lexical/tailwind";
+import { LexicalExtensionComposer } from "@lexical/react/LexicalExtensionComposer";
+import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import {
   $convertFromMarkdownString,
   $convertToMarkdownString,
   TRANSFORMERS,
 } from "@lexical/markdown";
+import {
+  AutoFocusExtension,
+  defineExtension,
+  HorizontalRuleExtension,
+} from "@lexical/extension";
+import { configExtension } from "lexical";
+import { ReactExtension } from "@lexical/react/ReactExtension";
 
 const theme = {
-  // Theme styling goes here
-  //...
+  heading: {
+    h1: "text-2xl font-bold",
+    h2: "text-xl font-bold uppercase",
+    h3: "text-lg uppercase",
+  },
 };
 
 export const Editor = () => {
-  const initialConfig = {
-    namespace: "note-editor",
+  const appExtension = defineExtension({
+    name: "note-editor",
     theme,
-    onError: console.error,
-    // editorState: () => $convertFromMarkdownString(md, TRANSFORMERS),
-  };
+    dependencies: [
+      RichTextExtension,
+      CodeExtension,
+      AutoFocusExtension,
+      HorizontalRuleExtension,
+
+      AutoLinkExtension,
+      ClickableLinkExtension,
+      LinkExtension,
+
+      TailwindExtension,
+
+      configExtension(ReactExtension, { contentEditable: null }),
+    ],
+    nodes: [
+      HeadingNode,
+      QuoteNode,
+
+      ListNode,
+      ListItemNode,
+
+      CodeNode,
+      CodeHighlightNode,
+
+      LinkNode,
+      AutoLinkNode,
+    ],
+  });
 
   return (
-    <LexicalComposer initialConfig={initialConfig}>
-      <RichTextPlugin
-        contentEditable={
-          <ContentEditable
-            aria-placeholder={"Enter some text..."}
-            placeholder={<div>Enter some text...</div>}
-          />
-        }
-        ErrorBoundary={LexicalErrorBoundary}
-      />
+    <LexicalExtensionComposer extension={appExtension} contentEditable={null}>
+      <div className="editor-container h-full">
+        <div className="editor-inner h-full">
+          <ContentEditable className="editor-input focus:outline-none h-full" />
+        </div>
+      </div>
+
       <HistoryPlugin />
-      <AutoFocusPlugin />
-    </LexicalComposer>
+
+      <MarkdownShortcutPlugin transformers={TRANSFORMERS} />
+    </LexicalExtensionComposer>
   );
 };
