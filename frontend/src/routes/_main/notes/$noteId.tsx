@@ -112,7 +112,7 @@ function RouteComponent() {
         ))}
       </div>
 
-      <Editor />
+      <Editor text={text} />
     </div>
   );
 }

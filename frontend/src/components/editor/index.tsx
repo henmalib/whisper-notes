@@ -25,6 +25,24 @@ import {
 } from "@lexical/extension";
 import { configExtension } from "lexical";
 import { ReactExtension } from "@lexical/react/ReactExtension";
+import { useEffect } from "react";
+
+export const LoadStateFromMarkdownExtenstion = defineExtension({
+  name: "md-load-ext",
+  afterRegistration(editor, config, state) {
+    if ("text" in config) {
+      editor.update(() => {
+        $convertFromMarkdownString(
+          config.text! as string,
+          TRANSFORMERS,
+          undefined,
+          true,
+        );
+      });
+    }
+    return () => {};
+  },
+});
 
 const theme = {
   heading: {
@@ -34,7 +52,7 @@ const theme = {
   },
 };
 
-export const Editor = () => {
+export const Editor = ({ text }: { text: string }) => {
   const appExtension = defineExtension({
     name: "note-editor",
     theme,
@@ -50,6 +68,7 @@ export const Editor = () => {
 
       TailwindExtension,
 
+      configExtension(LoadStateFromMarkdownExtenstion, { text }),
       configExtension(ReactExtension, { contentEditable: null }),
     ],
     nodes: [
