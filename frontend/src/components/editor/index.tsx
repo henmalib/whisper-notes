@@ -59,7 +59,6 @@ export const Editor = ({ text }: { text: string }) => {
     dependencies: [
       RichTextExtension,
       CodeExtension,
-      AutoFocusExtension,
       HorizontalRuleExtension,
 
       AutoLinkExtension,

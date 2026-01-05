@@ -24,8 +24,15 @@ func (n *NoteInfo) getPath() string {
 }
 
 func (n *NoteInfo) ReadData() (string, error) {
-	// TODO: read actuall data
-	return "# Header", nil
+	path := path.Join(getNotePath(n.Id), "note.md")
+
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("Error while reading note data: %w", err)
+	}
+
+	return string(bytes), nil
+
 }
 
 func (n *NoteInfo) ReadMetadata() (*Metadata, error) {
@@ -85,5 +92,3 @@ func (n *NoteInfo) ListAudio() ([]AudioFile, error) {
 
 	return audios, nil
 }
-
-func (n *NoteInfo) ChangeContent(content string) error { return nil }

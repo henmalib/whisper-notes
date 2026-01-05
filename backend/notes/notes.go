@@ -76,37 +76,76 @@ func (n *Notes) FindNote(id string) *NoteInfo {
 	}
 }
 
+func updateNoteMeta(noteId string, meta *Metadata) error {
+	notePath := getNotePath(noteId)
+
+	// TODO: instead of json, use frontmatter of .md
+	file, err := os.OpenFile(path.Join(notePath, "_metadata.json"), os.O_RDWR|os.O_CREATE, 0700)
+
+	if err != nil {
+		return fmt.Errorf("Coudn't create metadata file: %w", err)
+	}
+
+	defer file.Close()
+
+	metadataBytes, err := json.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("Invalid metadata format: %w", err)
+	}
+
+	_, err = file.Write(metadataBytes)
+	if err != nil {
+		return fmt.Errorf("Coudn't write metadata file: %w", err)
+	}
+
+	return nil
+}
+
+func updateNoteData(noteId, data string) error {
+	notePath := getNotePath(noteId)
+	file, err := os.OpenFile(path.Join(notePath, "note.md"), os.O_RDWR|os.O_CREATE, 0700)
+
+	if err != nil {
+		return fmt.Errorf("Failed to create note file: %w", err)
+	}
+
+	defer file.Close()
+
+	_, err = file.WriteString(data)
+	if err != nil {
+		return fmt.Errorf("Failed to write note file: %w", err)
+	}
+
+	return nil
+}
+
 func (n *Notes) CreateNote(title string) (string, error) {
 	noteId := uuid.New().String()
-	notePath := path.Join(n.cfg.GetConfig().NotesPath, noteId)
+	notePath := getNotePath(noteId)
 
 	if err := os.MkdirAll(notePath, 0755); err != nil {
 		return noteId, err
 	}
 
-	file, err := os.OpenFile(path.Join(notePath, "_metadata.json"), os.O_RDWR|os.O_CREATE, 0700)
-	if err != nil {
-		return noteId, fmt.Errorf("Coudn't create metadata file: %w", err)
-	}
-
-	defer file.Close()
-
-	metadataBytes, err := json.Marshal(Metadata{
-		Title: title,
+	err := updateNoteMeta(noteId, &Metadata{
+		Title: "Untitled",
 	})
 
-	if err != nil {
-		return noteId, fmt.Errorf("Coudn't create metadata file: %w", err)
-	}
-
-	_, err = file.Write(metadataBytes)
-	if err != nil {
-		return noteId, fmt.Errorf("Coudn't write metadata file: %w", err)
-	}
-
-	return noteId, nil
+	return noteId, err
 }
 
 func getNotePath(noteId string) string {
 	return path.Join(os.ExpandEnv(viper.GetString("NotesPath")), noteId)
+}
+
+func UpdateNote(noteId string, text string, meta *Metadata) error {
+	if err := updateNoteMeta(noteId, meta); err != nil {
+		return err
+	}
+
+	if err := updateNoteData(noteId, text); err != nil {
+		return err
+	}
+
+	return nil
 }

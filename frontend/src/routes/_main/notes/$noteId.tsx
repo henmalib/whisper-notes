@@ -20,6 +20,7 @@ import {
   GetNoteMetadata,
   GetNoteAudios,
   GetNoteText,
+  SaveNote,
 } from "@wailsjs/go/fronthelpers/FrontHelpers";
 import { notes } from "@wailsjs/go/models";
 import { FindNote } from "@wailsjs/go/notes/Notes";
@@ -91,8 +92,15 @@ export const Route = createFileRoute("/_main/notes/$noteId")({
 });
 
 function RouteComponent() {
-  const { metadata, audios, text } = Route.useLoaderData();
+  const { metadata, audios, text, note } = Route.useLoaderData();
   const [title, setTitle] = useState(metadata.title);
+
+  const save = async () => {
+    SaveNote(note.id, "test", {
+      ...metadata,
+      title,
+    });
+  };
 
   return (
     <div className="w-full h-full">
@@ -111,6 +119,8 @@ function RouteComponent() {
           <AudioPlayer key={index} {...a} />
         ))}
       </div>
+
+      <Button onClick={save}>SAVE</Button>
 
       <Editor text={text} />
     </div>

@@ -2,6 +2,7 @@ package fronthelpers
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 
@@ -33,5 +34,19 @@ func (h *FrontHelpers) GetNoteAudios(n *notes.NoteInfo) ([]notes.AudioFile, erro
 }
 
 func (h *FrontHelpers) GetNoteText(n *notes.NoteInfo) (string, error) {
-	return n.ReadData()
+	data, err := n.ReadData()
+
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+
+		return "", err
+	}
+
+	return data, nil
+}
+
+func (h *FrontHelpers) SaveNote(id string, text string, metadata *notes.Metadata) error {
+	return notes.UpdateNote(id, text, metadata)
 }
